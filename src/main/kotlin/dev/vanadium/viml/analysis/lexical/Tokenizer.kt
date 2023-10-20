@@ -1,4 +1,4 @@
-package dev.vanadium.viml.parse
+package dev.vanadium.viml.analysis.lexical
 
 class Tokenizer(var inputString: String) {
 
@@ -21,6 +21,7 @@ class Tokenizer(var inputString: String) {
 
         lastToken =
             runTokenParsers() ?: throw RuntimeException("Could not parse next token starting with '${currentChar}'")
+
         return lastToken
     }
 
@@ -102,7 +103,7 @@ class Tokenizer(var inputString: String) {
 
         input.advance(tokenLength)
 
-        return Token(TokenType.INTEGER_LITERAL, buffer.toString(), lineNumber)
+        return Token(TokenType.NUMBER_LITERAL, buffer.toString(), lineNumber)
     }
 
     fun parseStringMatchedToken(): Token? {

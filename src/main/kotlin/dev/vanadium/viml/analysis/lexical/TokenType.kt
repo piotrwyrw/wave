@@ -1,21 +1,22 @@
-package dev.vanadium.viml.parse
+package dev.vanadium.viml.analysis.lexical
 
 enum class TokenType(val value: String? = null) {
 
-    UNDEFINED(),
+    UNDEFINED,
 
     LPAREN("("),
     RPAREN(")"),
 
     IDENTIFIER,
 
-    INTEGER_LITERAL,
+    NUMBER_LITERAL,
     STRING_LITERAL,
 
     COMMA(","),
     MINUS("-"),
     LGREATER(">"),
     RGREATER("<"),
+    SEMICOLON(";"),
 
     // Complex tokens
     POINT_RIGHT("->")

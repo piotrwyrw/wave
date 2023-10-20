@@ -1,4 +1,4 @@
-package dev.vanadium.viml.parse
+package dev.vanadium.viml.analysis.lexical
 
 class Token(val type: TokenType, val value: String, val line: Int) {
 
