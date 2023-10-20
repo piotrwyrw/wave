@@ -10,7 +10,8 @@ class Tokenizer(var inputString: String) {
     var input: StringBuilder = StringBuilder(inputString)
 
     init {
-        tokenParsers = arrayOf(::parseIdentifier, ::parseIntegerLiteral, ::parseStringMatchedToken)
+        tokenParsers =
+            arrayOf(::parseIdentifier, ::parseIntegerLiteral, ::parseStringMatchedToken, ::parseStringLiteralToken)
     }
 
     fun nextToken(): Token? {
@@ -18,7 +19,8 @@ class Tokenizer(var inputString: String) {
 
         val currentChar: Char = this.input.firstOrNull() ?: return null
 
-        lastToken = runTokenParsers() ?: throw RuntimeException("Could not parse next token starting with '${currentChar}'")
+        lastToken =
+            runTokenParsers() ?: throw RuntimeException("Could not parse next token starting with '${currentChar}'")
         return lastToken
     }
 
@@ -46,7 +48,7 @@ class Tokenizer(var inputString: String) {
             if (trimmedChar == '\n')
                 lineNumber++
 
-            spaceCount ++
+            spaceCount++
         }
 
         input.advance(spaceCount)
@@ -72,11 +74,11 @@ class Tokenizer(var inputString: String) {
                 break
 
             buffer.append(char)
-            remainingTokenLength ++
+            remainingTokenLength++
         }
 
         input.advance(remainingTokenLength) // We cannot advance the input buffer while looping over its contents
-                                            // because weird things will happen
+        // because weird things will happen
 
         return Token(TokenType.IDENTIFIER, buffer.toString(), lineNumber)
     }
@@ -95,7 +97,7 @@ class Tokenizer(var inputString: String) {
                 break
 
             buffer.append(char)
-            tokenLength ++
+            tokenLength++
         }
 
         input.advance(tokenLength)
@@ -110,6 +112,31 @@ class Tokenizer(var inputString: String) {
         input.advance(type.value!!.length)
 
         return Token(type, type.value, lineNumber)
+    }
+
+    fun parseStringLiteralToken(): Token? {
+        val first = input.firstOrNull() ?: return null
+
+        if (first != '"')
+            return null
+
+        val buffer = StringBuilder("")
+
+        input.advance() // Skip the ' " '
+
+        var stringLength: Int = 0
+
+        for (char in input) {
+            if (char == '"')
+                break
+
+            buffer.append(char)
+            stringLength++
+        }
+
+        input.advance(stringLength + 1) // +1 -> Also skip the trailing quotation mark
+
+        return Token(TokenType.STRING_LITERAL, buffer.toString(), lineNumber)
     }
 
 }

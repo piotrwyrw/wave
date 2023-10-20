@@ -2,20 +2,31 @@ package dev.vanadium.viml.parse
 
 import dev.vanadium.viml.cmd.CommandArgument
 
+class Script(val nodes: List<Node>)
+
+/**
+ * Superclass of all nodes ever
+ */
+abstract class Node
+
 /**
  * The base class for all nodes involved in flow control and
  * commanding of the underlying graphics engine
  */
-abstract class ActionNode
+abstract class StatementNode : Node()
 
 /**
- * Base class for all expression nodes (arrays, arithmetic ops], ...)
+ * Base class for all expression nodes (arrays, arithmetic ops, ...)
  */
-abstract class ExpressionNode
+abstract class ExpressionNode : Node()
 
 
-class LiteralExpression<T>(
-    val value: T
+class StringLiteralExpression (
+    val value: String
+) : ExpressionNode()
+
+class IntegerLiteralExpression (
+    val value: Int
 ) : ExpressionNode()
 
 class ArrayExpression(
@@ -38,4 +49,4 @@ class InterpolationExpression(
 class CommandNode(
     val label: String,
     val args: ArrayList<CommandArgument>
-) : ActionNode()
+) : StatementNode()

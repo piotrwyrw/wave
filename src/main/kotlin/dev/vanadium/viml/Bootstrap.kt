@@ -1,14 +1,11 @@
 package dev.vanadium.viml
 
-import dev.vanadium.viml.parse.Token
+import dev.vanadium.viml.parse.Parser
 import dev.vanadium.viml.parse.Tokenizer
 
 fun main() {
-    val tokenizer = Tokenizer("int main(void) -> Unit")
+    val tokenizer = Tokenizer("(1, 2, \"Hello, World!\")")
+    val parser = Parser(tokenizer)
 
-    var token: Token?
-
-    while (tokenizer.hasNext()) {
-        println(tokenizer.nextToken()!!)
-    }
+    val node = parser.parseScript()
 }
