@@ -1,5 +1,6 @@
 package dev.vanadium.viml.analysis.syntactic
 
+import dev.vanadium.viml.*
 import dev.vanadium.viml.analysis.lexical.*
 import dev.vanadium.viml.exception.SyntaxError
 import java.lang.Double.parseDouble
@@ -24,7 +25,7 @@ class Parser(val tokenizer: Tokenizer) {
     fun parseScript(): Script {
         val nodes: ArrayList<Node> = arrayListOf()
 
-        while (tokenizer.hasNext()) {
+        while (currentToken.type != TokenType.UNDEFINED) {
             nodes.add(parseNext())
         }
 
@@ -55,7 +56,7 @@ class Parser(val tokenizer: Tokenizer) {
         if (expr::class != to::class)
             throw SyntaxError("The interpolation expression expects same types on both sides, got ${expr.javaClass.simpleName} and ${to.javaClass.simpleName} on line ${currentToken.line}.")
 
-        return InterpolationExpression(expr, to)
+        return InterpolationExpression(expr, to, expr.line)
     }
 
     fun parseSimpleExpression(): ExpressionNode {
@@ -66,7 +67,9 @@ class Parser(val tokenizer: Tokenizer) {
 
             consume() // Skip the operator
 
-            left = BinaryExpressionNode(left, parseMultiplicativeExpression(), op)
+            val right = parseMultiplicativeExpression()
+
+            left = BinaryExpressionNode(left, right, op, right.line)
         }
 
         return left
@@ -80,7 +83,9 @@ class Parser(val tokenizer: Tokenizer) {
 
             consume() // Skip the operator
 
-            left = BinaryExpressionNode(left, parseExpressionAtom(), op)
+            val right = parseExpressionAtom()
+
+            left = BinaryExpressionNode(left, right, op, right.line)
         }
 
         return left
@@ -111,7 +116,7 @@ class Parser(val tokenizer: Tokenizer) {
             throw SyntaxError("Expected integer literal, got ${currentToken.type} on line ${currentToken.line}")
         }
 
-        val literal = NumberLiteralExpression(parseDouble(currentToken.value))
+        val literal = NumberLiteralExpression(parseDouble(currentToken.value), currentToken.line)
 
         consume()
 
@@ -123,7 +128,7 @@ class Parser(val tokenizer: Tokenizer) {
             throw SyntaxError("Expected string literal, got ${currentToken.type} on line ${currentToken.line}")
         }
 
-        val literal = StringLiteralExpression(currentToken.value)
+        val literal = StringLiteralExpression(currentToken.value, currentToken.line)
 
         consume()
 
@@ -135,6 +140,8 @@ class Parser(val tokenizer: Tokenizer) {
             throw SyntaxError("Expected '$' at the beginning of a variable reference, got ${currentToken.type} on line ${currentToken.line}")
         }
 
+        val line = currentToken.line
+
         consume() // Skip '$'
 
         if (!compareToken(currentToken, TokenType.IDENTIFIER)) {
@@ -145,15 +152,17 @@ class Parser(val tokenizer: Tokenizer) {
 
         consume() // Skip variable ID
 
-        return VariableReferenceExpression(id)
+        return VariableReferenceExpression(id, line)
     }
 
     fun parseArray(): ArrayExpression {
         val expressions: ArrayList<ExpressionNode> = arrayListOf()
 
         if (!compareToken(currentToken, TokenType.LPAREN)) {
-            throw SyntaxError("Expected '(' at the beginning of an array, got ${currentToken.type} on line ${currentToken!!.line}")
+            throw SyntaxError("Expected '(' at the beginning of an array, got ${currentToken.type} on line ${currentToken.line}")
         }
+
+        val line = currentToken.line
 
         consume() // Skip '('
 
@@ -180,7 +189,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         consume() // Skip ')'
 
-        return ArrayExpression(expressions)
+        return ArrayExpression(expressions, line)
     }
 
     fun parseCommand(): CommandNode {
@@ -188,17 +197,25 @@ class Parser(val tokenizer: Tokenizer) {
             throw SyntaxError("Expected identifier at the beginning of a command, got ${currentToken.type} on line ${currentToken.line}")
         }
 
+        val line = currentToken.line
+
         val label = currentToken.value
 
         consume() // Skip the command identifier
 
         val args = parseCommandArguments() // Parse the arguments
 
-        return CommandNode(label, args)
+        return CommandNode(label, args, line)
     }
 
     fun parseCommandArguments(): HashMap<String, ExpressionNode> {
         val args: HashMap<String, ExpressionNode> = hashMapOf()
+
+        // Maybe there are no parameters?
+        if (compareToken(currentToken, TokenType.SEMICOLON)) {
+            consume() // Skip ';'
+            return args
+        }
 
         // First, try parsing a default parameter
         if (!compareToken(currentToken, TokenType.IDENTIFIER)) {

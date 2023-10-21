@@ -4,6 +4,16 @@ import java.awt.Graphics2D
 import java.awt.image.BufferedImage
 
 class Canvas {
+    companion object {
+        private var singleton: Canvas? = null
+
+        fun instance(): Canvas {
+            if (singleton == null)
+                singleton = Canvas()
+
+            return singleton!!
+        }
+    }
 
     private var image: BufferedImage? = null
     private var graphics: Graphics2D? = null

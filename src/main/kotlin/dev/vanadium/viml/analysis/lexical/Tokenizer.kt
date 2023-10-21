@@ -78,7 +78,7 @@ class Tokenizer(var inputString: String) {
             remainingTokenLength++
         }
 
-        input.advance(remainingTokenLength) // We cannot advance the input buffer while looping over its contents
+        input.advance(remainingTokenLength) // We cannot advance the input.viml buffer while looping over its contents
         // because weird things will happen
 
         return Token(TokenType.IDENTIFIER, buffer.toString(), lineNumber)
