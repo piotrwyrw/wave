@@ -14,9 +14,13 @@ enum class TokenType(val value: String? = null) {
 
     COMMA(","),
     MINUS("-"),
+    PLUS("+"),
+    ASTERISK("*"),
+    SLASH("/"),
     LGREATER(">"),
     RGREATER("<"),
     SEMICOLON(";"),
+    DOLLARSIGN("$"),
 
     // Complex tokens
     POINT_RIGHT("->")

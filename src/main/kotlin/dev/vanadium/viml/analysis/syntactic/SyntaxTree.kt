@@ -1,5 +1,9 @@
 package dev.vanadium.viml.analysis.syntactic
 
+import dev.vanadium.viml.analysis.lexical.Token
+import dev.vanadium.viml.analysis.lexical.TokenType
+import dev.vanadium.viml.exception.SyntaxError
+
 class Script(val nodes: List<Node>) {
 
     fun printAllNodes() {
@@ -63,6 +67,14 @@ class ArrayExpression(
     }
 }
 
+class VariableReferenceExpression(
+    val id: String
+) : ExpressionNode() {
+    override fun print(indent: Int) {
+        println(indentation(indent) + "Variable: ${id}")
+    }
+}
+
 class InterpolationExpression(
     val from: ExpressionNode,
     val to: ExpressionNode
@@ -74,6 +86,38 @@ class InterpolationExpression(
 
         println(indentation(indent + 1) + "To:")
         to.print(indent + 2)
+    }
+}
+
+enum class BinaryOperation {
+    ADD,
+    SUBTRACT,
+    MULTIPLY,
+    DIVIDE
+}
+
+fun binaryOperationFromToken(token: Token): BinaryOperation {
+    return when (token.type) {
+        TokenType.PLUS -> BinaryOperation.ADD
+        TokenType.SLASH -> BinaryOperation.DIVIDE
+        TokenType.MINUS -> BinaryOperation.SUBTRACT
+        TokenType.ASTERISK -> BinaryOperation.MULTIPLY
+        else -> throw SyntaxError("Unknown binary operator ${token.type} on line ${token.line}")
+    }
+}
+
+class BinaryExpressionNode(
+    val left: ExpressionNode,
+    val right: ExpressionNode,
+    val operator: BinaryOperation
+) : ExpressionNode() {
+    override fun print(indent: Int) {
+        println(indentation(indent) + "Binary operation (${operator}):")
+        println(indentation(indent + 1) + "Left:")
+        left.print(indent + 2)
+
+        println(indentation(indent + 1) + "Right")
+        right.print(indent + 2)
     }
 }
 

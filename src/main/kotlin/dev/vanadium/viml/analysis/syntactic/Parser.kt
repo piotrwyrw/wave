@@ -1,7 +1,7 @@
 package dev.vanadium.viml.analysis.syntactic
 
-import dev.vanadium.viml.exception.SyntaxError
 import dev.vanadium.viml.analysis.lexical.*
+import dev.vanadium.viml.exception.SyntaxError
 import java.lang.Double.parseDouble
 
 class Parser(val tokenizer: Tokenizer) {
@@ -59,19 +59,51 @@ class Parser(val tokenizer: Tokenizer) {
     }
 
     fun parseSimpleExpression(): ExpressionNode {
-        if (compareToken(currentToken, TokenType.NUMBER_LITERAL)) {
-            return parseIntegerLiteralExpression()
+        var left = parseMultiplicativeExpression()
+
+        while (compareToken(currentToken, TokenType.PLUS) || compareToken(currentToken, TokenType.MINUS)) {
+            val op = binaryOperationFromToken(currentToken)
+
+            consume() // Skip the operator
+
+            left = BinaryExpressionNode(left, parseMultiplicativeExpression(), op)
         }
 
+        return left
+    }
+
+    fun parseMultiplicativeExpression(): ExpressionNode {
+        var left = parseExpressionAtom()
+
+        while (compareToken(currentToken, TokenType.ASTERISK) || compareToken(currentToken, TokenType.SLASH)) {
+            val op = binaryOperationFromToken(currentToken)
+
+            consume() // Skip the operator
+
+            left = BinaryExpressionNode(left, parseExpressionAtom(), op)
+        }
+
+        return left
+    }
+
+    fun parseExpressionAtom(): ExpressionNode {
         if (compareToken(currentToken, TokenType.STRING_LITERAL)) {
             return parseStringLiteralExpression()
+        }
+
+        if (compareToken(currentToken, TokenType.NUMBER_LITERAL)) {
+            return parseIntegerLiteralExpression()
         }
 
         if (compareToken(currentToken, TokenType.LPAREN)) {
             return parseArray()
         }
 
-        throw SyntaxError("Unknown expression starting with ${currentToken.type} on line ${currentToken.line}")
+        if (compareToken(currentToken, TokenType.DOLLARSIGN)) {
+            return parseVariableReferenceExpression()
+        }
+
+        throw SyntaxError("Unknown expression atom starting with ${currentToken.type} on line ${currentToken.line}")
     }
 
     fun parseIntegerLiteralExpression(): NumberLiteralExpression {
@@ -96,6 +128,24 @@ class Parser(val tokenizer: Tokenizer) {
         consume()
 
         return literal
+    }
+
+    fun parseVariableReferenceExpression(): VariableReferenceExpression {
+        if (!compareToken(currentToken, TokenType.DOLLARSIGN)) {
+            throw SyntaxError("Expected '$' at the beginning of a variable reference, got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        consume() // Skip '$'
+
+        if (!compareToken(currentToken, TokenType.IDENTIFIER)) {
+            throw SyntaxError("Expected identifier after '$', got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        val id = currentToken.value
+
+        consume() // Skip variable ID
+
+        return VariableReferenceExpression(id)
     }
 
     fun parseArray(): ArrayExpression {
