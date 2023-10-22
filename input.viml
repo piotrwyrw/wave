@@ -1,2 +1,4 @@
 print "Hello, World!";
 print "One plus two equals " + (1 + 2) + " and one over four evaluates to " + (1 / 4);
+
+canvas width 123 height 100 background [255, 255, 0];

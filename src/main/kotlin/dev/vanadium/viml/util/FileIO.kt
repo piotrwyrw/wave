@@ -10,5 +10,5 @@ fun readFile(file: File): String {
     if (lines.isEmpty())
         return ""
 
-    return lines.reduce { acc, s -> acc + s }
+    return lines.reduce { acc, s -> acc + "\n${s}" }
 }

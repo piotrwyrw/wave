@@ -4,6 +4,7 @@ import dev.vanadium.viml.CommandNode
 import dev.vanadium.viml.Node
 import dev.vanadium.viml.Script
 import dev.vanadium.viml.handler.CommandHandler
+import dev.vanadium.viml.handler.validateArguments
 import dev.vanadium.viml.reflect.findAllCommandHandlers
 
 class Runtime(val script: Script) {
@@ -18,7 +19,8 @@ class Runtime(val script: Script) {
     }
 
     fun findVariable(id: String): Variable {
-        return variables.filter { it.id == id }.firstOrNull() ?: throw IllegalStateException("Trying to find an unknown variable in a runtime operation \"${id}\".")
+        return variables.filter { it.id == id }.firstOrNull()
+            ?: throw IllegalStateException("Trying to find an unknown variable in a runtime operation \"${id}\".")
     }
 
     fun registerCommand(label: String, handler: CommandHandler) {
@@ -47,7 +49,16 @@ class Runtime(val script: Script) {
             node.args[t] = u.reduceToAtomic(this)
         }
 
-        commandHandlers[node.label]!!.invoke(node.label, node.args)
+        val handler = commandHandlers[node.label]!!
+
+        val validators = handler.validateArguments(node.args, this)
+
+        if (validators != null) {
+            validateArguments(node.label, node.line, node.args, validators)
+        }
+
+        handler.preflight(node.label, node.args, this, node.line)
+        handler.invoke(node.label, node.args, this, node.line)
     }
 
 }

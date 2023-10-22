@@ -140,9 +140,12 @@ class LiteralExpression<T>(
 }
 
 class ArrayExpression(
-    val value: List<ExpressionNode>,
-    line: Int
+    val value: ArrayList<ExpressionNode>,
+    line: Int,
 ) : ExpressionNode(line) {
+
+    var type: Class<*>? = null
+
     override fun print(indent: Int) {
         println(indentation(indent) + "Array Expression:")
         value.forEachIndexed { index, expr ->
@@ -150,6 +153,47 @@ class ArrayExpression(
             expr.print(indent + 2)
         }
     }
+
+    override fun reduceToAtomic(runtime: Runtime): ArrayExpression {
+        val atomicValues: ArrayList<ExpressionNode> = arrayListOf()
+        value.forEachIndexed { index, node ->
+            atomicValues.add(value[index].reduceToAtomic(runtime))
+        }
+
+        return ArrayExpression(atomicValues, line).validateTypes()
+    }
+
+    fun validateTypes(): ArrayExpression {
+        // Check if all types in the array are equal
+        val initial = value.firstOrNull()
+
+        // We need to put SOMETHING in place of the array's type ...
+        if (initial == null) {
+            type = LiteralExpression::class.java
+            return this
+        }
+
+        value.forEach {
+            if (initial::class.java != it::class.java)
+                throw RuntimeException("An array may only be made up of a single type of elements: Error on line \"${line}\"")
+        }
+
+        type = initial::class.java
+
+        return this
+    }
+
+    fun isNumberArray(runtime: Runtime, length: IntRange? = null): Boolean {
+        val arr = reduceToAtomic(runtime).validateTypes()
+        if (arr.type != LiteralExpression::class.java)
+            return false
+        val initial = arr.value.firstOrNull() ?: return length == null || length.min() == 0
+        if ((initial as LiteralExpression<*>).value !is Double)
+            return false
+        if (length != null && !length.contains(arr.value.size)) return false
+        return true
+    }
+
 }
 
 class VariableReferenceExpression(

@@ -23,6 +23,17 @@ class Canvas {
         this.graphics = this.image!!.createGraphics()
     }
 
+    fun checkInitialized() {
+        image ?: throw RuntimeException("The canvas has not been initialized.")
+        graphics ?: throw RuntimeException("Graphics have not been initialized.")
+    }
+
+    fun fill(color: RGBAColor) {
+        checkInitialized()
+        graphics!!.color = color.awtColor()
+        graphics!!.fillRect(0, 0, image!!.width, image!!.height)
+    }
+
     fun graphics(): Graphics2D? {
         return this.graphics
     }
