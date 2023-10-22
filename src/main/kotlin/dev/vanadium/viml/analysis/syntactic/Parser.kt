@@ -97,10 +97,10 @@ class Parser(val tokenizer: Tokenizer) {
         }
 
         if (compareToken(currentToken, TokenType.NUMBER_LITERAL)) {
-            return parseIntegerLiteralExpression()
+            return parseNumberLiteralExpression()
         }
 
-        if (compareToken(currentToken, TokenType.LPAREN)) {
+        if (compareToken(currentToken, TokenType.LBRACKET)) {
             return parseArray()
         }
 
@@ -108,27 +108,37 @@ class Parser(val tokenizer: Tokenizer) {
             return parseVariableReferenceExpression()
         }
 
+        if (compareToken(currentToken, TokenType.LPAREN)) {
+            consume() // Skip '('
+            val expr = parseExpression()
+            if (!compareToken(currentToken, TokenType.RPAREN)) {
+                throw SyntaxError("Expected ')' after expression, got ${currentToken.type} on line ${currentToken.line}")
+            }
+            consume() // Skip ')'
+            return expr
+        }
+
         throw SyntaxError("Unknown expression atom starting with ${currentToken.type} on line ${currentToken.line}")
     }
 
-    fun parseIntegerLiteralExpression(): NumberLiteralExpression {
+    fun parseNumberLiteralExpression(): LiteralExpression<Double> {
         if (!compareToken(currentToken, TokenType.NUMBER_LITERAL)) {
             throw SyntaxError("Expected integer literal, got ${currentToken.type} on line ${currentToken.line}")
         }
 
-        val literal = NumberLiteralExpression(parseDouble(currentToken.value), currentToken.line)
+        val literal = LiteralExpression(parseDouble(currentToken.value), currentToken.line)
 
         consume()
 
         return literal
     }
 
-    fun parseStringLiteralExpression(): StringLiteralExpression {
+    fun parseStringLiteralExpression(): LiteralExpression<String> {
         if (!compareToken(currentToken, TokenType.STRING_LITERAL)) {
             throw SyntaxError("Expected string literal, got ${currentToken.type} on line ${currentToken.line}")
         }
 
-        val literal = StringLiteralExpression(currentToken.value, currentToken.line)
+        val literal = LiteralExpression(currentToken.value, currentToken.line)
 
         consume()
 
@@ -158,15 +168,15 @@ class Parser(val tokenizer: Tokenizer) {
     fun parseArray(): ArrayExpression {
         val expressions: ArrayList<ExpressionNode> = arrayListOf()
 
-        if (!compareToken(currentToken, TokenType.LPAREN)) {
-            throw SyntaxError("Expected '(' at the beginning of an array, got ${currentToken.type} on line ${currentToken.line}")
+        if (!compareToken(currentToken, TokenType.LBRACKET)) {
+            throw SyntaxError("Expected '[' at the beginning of an array, got ${currentToken.type} on line ${currentToken.line}")
         }
 
         val line = currentToken.line
 
         consume() // Skip '('
 
-        while (!compareToken(currentToken, TokenType.RPAREN)) {
+        while (!compareToken(currentToken, TokenType.RBRACKET)) {
             val expr = parseExpression()
 
             if (expr is ArrayExpression) {
@@ -180,11 +190,11 @@ class Parser(val tokenizer: Tokenizer) {
                 continue
             }
 
-            if (compareToken(currentToken, TokenType.RPAREN)) {
+            if (compareToken(currentToken, TokenType.RBRACKET)) {
                 break
             }
 
-            throw SyntaxError("Expected ')' or ',' and more expressions, got ${currentToken.type} on line ${currentToken.line}")
+            throw SyntaxError("Expected ']' or ',' and more expressions, got ${currentToken.type} on line ${currentToken.line}")
         }
 
         consume() // Skip ')'

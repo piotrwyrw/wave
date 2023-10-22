@@ -1,1 +1,2 @@
-print "Hello, World!" + " " + 123;
+print "Hello, World!";
+print "One plus two equals " + (1 + 2) + " and one over four evaluates to " + (1 / 4);

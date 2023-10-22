@@ -43,26 +43,100 @@ abstract class ExpressionNode(line: Int) : Node(line) {
      * By default, assume the expression is already atomic
      */
     open fun reduceToAtomic(runtime: Runtime): ExpressionNode = this
+
+    fun operation(op: BinaryOperation, another: ExpressionNode): ExpressionNode {
+        val allOps = allOperations(another, op)
+        if (allOps != null) {
+            return allOps
+        }
+
+        return when (op) {
+            BinaryOperation.ADD -> add(another)
+            BinaryOperation.SUBTRACT -> subtract(another)
+            BinaryOperation.MULTIPLY -> multiply(another)
+            BinaryOperation.DIVIDE -> divide(another)
+        }
+    }
+
+    open fun allOperations(another: ExpressionNode, operator: BinaryOperation): ExpressionNode? = null
+    open fun add(another: ExpressionNode): ExpressionNode =
+        throw RuntimeException("Illegal addition operation on ${this::class.java.simpleName} on line ${line}")
+
+    open fun subtract(another: ExpressionNode): ExpressionNode =
+        throw RuntimeException("Illegal subtraction operation on ${this::class.java.simpleName} on line ${line}")
+
+    open fun multiply(another: ExpressionNode): ExpressionNode =
+        throw RuntimeException("Illegal multiplication operation on ${this::class.java.simpleName} on line ${line}")
+
+    open fun divide(another: ExpressionNode): ExpressionNode =
+        throw RuntimeException("Illegal division operation on ${this::class.java.simpleName} on line ${line}")
+
+    open fun string(): String =
+        throw RuntimeException("The object \"${this::class.java.simpleName}\" does not support string conversions. Attempted on line ${line}")
+
 }
 
 
-class StringLiteralExpression(
-    val value: String,
+class LiteralExpression<T>(
+    val value: T,
     line: Int
 ) : ExpressionNode(line) {
     override fun print(indent: Int) {
-        println(indentation(indent) + "String Literal \"${value}\"")
+        println(indentation(indent) + "Literal \"${value}\"")
     }
 
-}
-
-class NumberLiteralExpression(
-    val value: Double,
-    line: Int
-) : ExpressionNode(line) {
-    override fun print(indent: Int) {
-        println(indentation(indent) + "Number Literal ${value}")
+    override fun allOperations(another: ExpressionNode, operator: BinaryOperation): ExpressionNode? {
+        if (another !is LiteralExpression<*> && value !is String) throw RuntimeException("Cannot add a non-literal to a literal on line ${line}")
+        return null
     }
+
+    override fun string(): String {
+        return value.toString()
+    }
+
+    override fun add(another: ExpressionNode): ExpressionNode {
+        val anotherValue = if (another !is LiteralExpression<*>) {
+            LiteralExpression(another.string(), line)
+        } else {
+            another
+        }
+
+        // At this point, `another` is a literal expression.
+
+        // The string always dominates the expression
+        if (value is String || anotherValue.value is String) {
+            return LiteralExpression(string() + anotherValue.string(), line)
+        }
+
+        val leftNumber = value as Double
+        val rightNumber = anotherValue.value as Double
+
+        return LiteralExpression(leftNumber + rightNumber, line)
+    }
+
+    override fun subtract(another: ExpressionNode): ExpressionNode {
+        checkIsNumber(another, BinaryOperation.SUBTRACT)
+
+        return LiteralExpression(value as Double - (another as LiteralExpression<*>).value as Double, line)
+    }
+
+    override fun multiply(another: ExpressionNode): ExpressionNode {
+        checkIsNumber(another, BinaryOperation.MULTIPLY)
+
+        return LiteralExpression(value as Double * (another as LiteralExpression<*>).value as Double, line)
+    }
+
+    override fun divide(another: ExpressionNode): ExpressionNode {
+        checkIsNumber(another, BinaryOperation.DIVIDE)
+
+        return LiteralExpression(value as Double / (another as LiteralExpression<*>).value as Double, line)
+    }
+
+    private fun checkIsNumber(another: ExpressionNode, operator: BinaryOperation) {
+        if (value is String || another !is LiteralExpression<*>) throw RuntimeException("Invalid operation candidates for operation ${operator}: ${this::class.simpleName} and ${another::class.simpleName} on line ${line}")
+        if (another.value !is Double) throw RuntimeException("Invalid operation candidates for operation ${operator}: ${this::class.simpleName} and ${another::class.simpleName} on line ${line}")
+    }
+
 }
 
 class ArrayExpression(
@@ -150,26 +224,7 @@ class BinaryExpressionNode(
         val leftAtomic = left.reduceToAtomic(runtime)
         val rightAtomic = right.reduceToAtomic(runtime)
 
-        // Handle string operations upfront
-        if (leftAtomic is StringLiteralExpression || rightAtomic is StringLiteralExpression) {
-            if (operator != BinaryOperation.ADD) {
-                throw RuntimeException("Only an addition may be performed on an expression involving a string. Attempted ${operator} on line ${line}.")
-            }
-
-            val leftValue: String = if (leftAtomic is StringLiteralExpression) (leftAtomic as StringLiteralExpression).value else (leftAtomic as NumberLiteralExpression).value.toString()
-            val rightValue: String = if (rightAtomic is StringLiteralExpression) (rightAtomic as StringLiteralExpression).value else (rightAtomic as NumberLiteralExpression).value.toString()
-
-            return StringLiteralExpression(
-                leftValue + rightValue,
-                line
-            )
-        }
-
-        if (leftAtomic !is NumberLiteralExpression || rightAtomic !is NumberLiteralExpression) {
-            throw RuntimeException("Illegal types for a binary operation: ${leftAtomic::class.simpleName} and ${rightAtomic::class.simpleName} on line ${line}")
-        }
-
-        return NumberLiteralExpression(operator.applyNumerically(leftAtomic.value, rightAtomic.value), line)
+        return leftAtomic.operation(operator, rightAtomic)
     }
 }
 

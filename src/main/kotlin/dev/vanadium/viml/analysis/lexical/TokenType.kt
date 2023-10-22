@@ -6,6 +6,8 @@ enum class TokenType(val value: String? = null) {
 
     LPAREN("("),
     RPAREN(")"),
+    LBRACKET("["),
+    RBRACKET("]"),
 
     IDENTIFIER,
 

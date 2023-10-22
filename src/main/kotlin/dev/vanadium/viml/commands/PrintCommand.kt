@@ -1,8 +1,7 @@
 package dev.vanadium.viml.commands
 
 import dev.vanadium.viml.ExpressionNode
-import dev.vanadium.viml.NumberLiteralExpression
-import dev.vanadium.viml.StringLiteralExpression
+import dev.vanadium.viml.LiteralExpression
 import dev.vanadium.viml.gfx.Canvas
 import dev.vanadium.viml.handler.CommandHandler
 import dev.vanadium.viml.reflect.Command
@@ -15,11 +14,12 @@ class PrintCommand : CommandHandler {
             return
         }
 
-        if (args["default"] is StringLiteralExpression)
-            println((args["default"] as StringLiteralExpression).value)
-        else if (args["default"] is NumberLiteralExpression)
-            println((args["default"] as NumberLiteralExpression).value)
-        else
-            println("[Complex Object]")
+        if (args["default"] !is LiteralExpression<*>) {
+            println(args["default"]!!.string())
+            return
+        }
+
+        val lit = args["default"] as LiteralExpression<*>
+        println(lit.value)
     }
 }
