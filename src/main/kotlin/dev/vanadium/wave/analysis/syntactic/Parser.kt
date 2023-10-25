@@ -122,7 +122,31 @@ class Parser(val tokenizer: Tokenizer) {
             return expr
         }
 
+        if (compareToken(currentToken, TokenType.VBAR)) {
+            return parseUnaryMagnitudeOperation()
+        }
+
         throw SyntaxError("Unknown expression atom starting with ${currentToken.type} on line ${currentToken.line}")
+    }
+
+    fun parseUnaryMagnitudeOperation(): UnaryOperationNode {
+        if (!compareToken(currentToken, TokenType.VBAR)) {
+            throw SyntaxError("Expected vertical bar at the beginning of a magnitude operator, got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        val line = currentToken.line
+
+        consume() // Skip first '|'
+
+        val expr = parseExpression()
+
+        if (!compareToken(currentToken, TokenType.VBAR)) {
+            throw SyntaxError("Expected vertical bar at the end of a magnitude operator, got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        consume() // Skip second '|'
+
+        return UnaryOperationNode(expr, UnaryOperation.MAGNITUDE, line)
     }
 
     fun parseNumberLiteralExpression(): LiteralExpression<Double> {

@@ -4,6 +4,9 @@ import dev.vanadium.wave.analysis.lexical.Token
 import dev.vanadium.wave.analysis.lexical.TokenType
 import dev.vanadium.wave.exception.SyntaxError
 import dev.vanadium.wave.runtime.Runtime
+import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.pow
 
 val DOUBLE_TYPE = java.lang.Double::class.java
 val STRING_TYPE = java.lang.String::class.java
@@ -47,7 +50,7 @@ abstract class ExpressionNode(line: Int) : Node(line) {
      */
     open fun reduceToAtomic(runtime: Runtime): ExpressionNode = this
 
-    fun operation(op: BinaryOperation, another: ExpressionNode): ExpressionNode {
+    fun binaryOperation(op: BinaryOperation, another: ExpressionNode): ExpressionNode {
         val allOps = allOperations(another, op)
         if (allOps != null) {
             return allOps
@@ -58,6 +61,12 @@ abstract class ExpressionNode(line: Int) : Node(line) {
             BinaryOperation.SUBTRACT -> subtract(another)
             BinaryOperation.MULTIPLY -> multiply(another)
             BinaryOperation.DIVIDE -> divide(another)
+        }
+    }
+
+    fun unaryOperation(op: UnaryOperation): ExpressionNode {
+        return when (op) {
+            UnaryOperation.MAGNITUDE -> magnitude()
         }
     }
 
@@ -73,6 +82,9 @@ abstract class ExpressionNode(line: Int) : Node(line) {
 
     open fun divide(another: ExpressionNode): ExpressionNode =
         throw RuntimeException("Illegal division operation on ${this::class.java.simpleName} on line ${line}")
+
+    open fun magnitude(): ExpressionNode =
+        throw RuntimeException("Illegal magnitude operation on ${this::class.java.simpleName} on line ${line}")
 
     open fun string(): String =
         throw RuntimeException("The object \"${this::class.java.simpleName}\" does not support string conversions. Attempted on line ${line}")
@@ -145,6 +157,14 @@ class LiteralExpression<T : Any>(
         return LiteralExpression(value as Double / (another as LiteralExpression<*>).value as Double, line)
     }
 
+    override fun magnitude(): ExpressionNode {
+        return when (value::class) {
+            String::class -> LiteralExpression((value as String).length, line)
+            Double::class -> LiteralExpression(abs(value as Double), line)
+            else -> throw RuntimeException("Invalid type for literal value encountered on line ${line}: ${value::class.simpleName}")
+        }
+    }
+
     private fun checkIsNumber(another: ExpressionNode, operator: BinaryOperation) {
         if (value is String || another !is LiteralExpression<*>) throw RuntimeException("Invalid operation candidates for operation ${operator}: ${this::class.simpleName} and ${another::class.simpleName} on line ${line}")
         if (another.value !is Double) throw RuntimeException("Invalid operation candidates for operation ${operator}: ${this::class.simpleName} and ${another::class.simpleName} on line ${line}")
@@ -197,6 +217,22 @@ class ArrayExpression(
         }
 
         return ArrayExpression(expressions, line)
+    }
+
+    override fun magnitude(): ExpressionNode {
+        if (value.size == 0)
+            return LiteralExpression(0.0, line)
+
+        var left: ExpressionNode = PowerExpression(value.first(), 2.0, line)
+
+        value.forEachIndexed { index, expressionNode ->
+            if (index == 0)
+                return@forEachIndexed
+
+            left = BinaryExpressionNode(left, PowerExpression(expressionNode, 2.0, line), BinaryOperation.ADD, line)
+        }
+
+        return PowerExpression(left, 1.0 / 2.0, line)
     }
 
     override fun reduceToAtomic(runtime: Runtime): ArrayExpression {
@@ -286,16 +322,6 @@ enum class BinaryOperation {
     SUBTRACT,
     MULTIPLY,
     DIVIDE;
-
-    fun applyNumerically(left: Double, right: Double): Double {
-        return when (this) {
-            ADD -> left + right
-            SUBTRACT -> left - right
-            MULTIPLY -> left * right
-            DIVIDE -> left / right
-        }
-    }
-
 }
 
 fun binaryOperationFromToken(token: Token): BinaryOperation {
@@ -327,8 +353,35 @@ class BinaryExpressionNode(
         val leftAtomic = left.reduceToAtomic(runtime)
         val rightAtomic = right.reduceToAtomic(runtime)
 
-        return leftAtomic.operation(operator, rightAtomic).reduceToAtomic(runtime)
+        return leftAtomic.binaryOperation(operator, rightAtomic).reduceToAtomic(runtime)
     }
+}
+
+enum class UnaryOperation {
+    MAGNITUDE
+}
+
+fun unaryOperationFromToken(token: Token): UnaryOperation {
+    return when (token.type) {
+        TokenType.VBAR -> UnaryOperation.MAGNITUDE
+        else -> throw SyntaxError("Unknown unary operator ${token.type} on line ${token.line}")
+    }
+}
+
+class UnaryOperationNode(
+    val expression: ExpressionNode,
+    val operator: UnaryOperation,
+    line: Int
+) : ExpressionNode(line) {
+    override fun print(indent: Int) {
+        println(indentation(indent) + "Unary operation (${operator}):")
+        expression.print(indent + 1)
+    }
+
+    override fun reduceToAtomic(runtime: Runtime): ExpressionNode {
+        return expression.reduceToAtomic(runtime).unaryOperation(operator).reduceToAtomic(runtime)
+    }
+
 }
 
 class CommandNode(
@@ -359,5 +412,26 @@ class VariableAssignment(
     }
 
     override fun reduceToAtomic(runtime: Runtime): ExpressionNode = value.reduceToAtomic(runtime)
+
+}
+
+class PowerExpression(
+    val expression: ExpressionNode,
+    val power: Double,
+    line: Int
+) : ExpressionNode(line) {
+    override fun print(indent: Int) {
+        println(indentation(indent) + "Exponential expression (Power ${power}):")
+        expression.print(indent + 1)
+    }
+
+    override fun reduceToAtomic(runtime: Runtime): ExpressionNode {
+        val atomic = expression.reduceToAtomic(runtime)
+        if (atomic !is LiteralExpression<*>)
+            throw RuntimeException("Exponential expression not atomic enough on line ${line}.")
+        if (atomic.value !is Double)
+            throw RuntimeException("Exponential expression must be a number. Error on line ${line}.")
+        return LiteralExpression(atomic.value.pow(power), line)
+    }
 
 }
