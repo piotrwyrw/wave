@@ -2,6 +2,8 @@ package dev.vanadium.viml.gfx
 
 import java.awt.Graphics2D
 import java.awt.image.BufferedImage
+import java.io.File
+import javax.imageio.ImageIO
 
 class Canvas {
     companion object {
@@ -34,8 +36,23 @@ class Canvas {
         graphics!!.fillRect(0, 0, image!!.width, image!!.height)
     }
 
+    fun color(color: RGBAColor) {
+        checkInitialized()
+        graphics!!.color = color.awtColor()
+    }
+
+    fun line(fromX: Int, fromY: Int, toX: Int, toY: Int) {
+        checkInitialized()
+        graphics!!.drawLine(fromX, fromY, toX, toY)
+    }
+
     fun graphics(): Graphics2D? {
         return this.graphics
+    }
+
+    fun store(output: String) {
+        checkInitialized()
+        ImageIO.write(this.image, "PNG", File(output))
     }
 
 }

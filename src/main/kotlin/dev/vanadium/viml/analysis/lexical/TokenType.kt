@@ -23,6 +23,7 @@ enum class TokenType(val value: String? = null) {
     RGREATER("<"),
     SEMICOLON(";"),
     DOLLARSIGN("$"),
+    EQUALS("="),
 
     // Complex tokens
     POINT_RIGHT("->")

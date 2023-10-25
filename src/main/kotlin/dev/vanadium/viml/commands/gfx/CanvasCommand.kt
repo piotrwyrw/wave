@@ -1,6 +1,7 @@
 package dev.vanadium.viml.commands.gfx
 
 import dev.vanadium.viml.ArrayExpression
+import dev.vanadium.viml.DOUBLE_TYPE
 import dev.vanadium.viml.ExpressionNode
 import dev.vanadium.viml.LiteralExpression
 import dev.vanadium.viml.gfx.Canvas
@@ -13,6 +14,11 @@ import dev.vanadium.viml.runtime.Runtime
 
 @Command("canvas")
 class CanvasCommand : CommandHandler {
+
+    var width: Double = 0.0
+    var height: Double = 0.0
+    var background: ArrayExpression? = null
+
     override fun validateArguments(args: HashMap<String, ExpressionNode>, runtime: Runtime): Array<ArgumentValidation> {
         return arrayOf(
             ArgumentValidation("width", ArgumentType.REQUIRED, LiteralExpression::class.java),
@@ -22,23 +28,30 @@ class CanvasCommand : CommandHandler {
     }
 
     override fun preflight(label: String, args: HashMap<String, ExpressionNode>, runtime: Runtime, line: Int) {
-        val width = (args["width"]!! as LiteralExpression<*>).value
-        val height = (args["height"]!! as LiteralExpression<*>).value
+        val width = (args["width"]!! as LiteralExpression<*>).ifTypeNot(DOUBLE_TYPE) {
+            throw RuntimeException("Command argument \"width\" of command \"${label}\" is expected to be a number")
+        }.value as Double
 
-        if (width !is Double) throw RuntimeException("Command the argument \"width\" of command \"${label}\" is expected to be a number")
-        if (height !is Double) throw RuntimeException("Command the argument \"height\" of command \"${label}\" is expected to be a number")
+        val height = (args["height"]!! as LiteralExpression<*>).ifTypeNot(DOUBLE_TYPE) {
+            throw RuntimeException("Command argument \"height\" of command \"${label}\" is expected to be a number")
+        }.value as Double
 
         if (width <= 0 || height <= 0)
             throw RuntimeException("The canvas must be at least one pixel big. Error on line ${line}")
+
+        this.width = width
+        this.height = height
 
         if (args["background"] == null) {
             return
         }
 
         val background = (args["background"] as ArrayExpression).validateTypes()
-        if (!background.isNumberArray(runtime, 3 .. 4)) {
+        if (!background.checkAgainst(DOUBLE_TYPE, 3..4)) {
             throw RuntimeException("Command \"${label}\" expected an array of size 3 or 4 as optional argument \"background\" on line ${line}")
         }
+
+        this.background = background
     }
 
     override fun command(
@@ -48,14 +61,10 @@ class CanvasCommand : CommandHandler {
         runtime: Runtime,
         line: Int
     ) {
-        canvas.initialize(
-            ((args["width"] as LiteralExpression<*>).value as Double).toInt(),
-            ((args["height"] as LiteralExpression<*>).value as Double).toInt()
-        )
+        canvas.initialize(width.toInt(), height.toInt())
 
-        if (args["background"] != null) {
-            canvas.fill(RGBAColor.fromArray(args["background"] as ArrayExpression))
+        if (background != null) {
+            canvas.fill(RGBAColor.fromArray(background!!))
         }
-
     }
 }

@@ -1,26 +1,23 @@
 package dev.vanadium.viml.runtime
 
-import dev.vanadium.viml.CommandNode
-import dev.vanadium.viml.Node
-import dev.vanadium.viml.Script
+import dev.vanadium.viml.*
 import dev.vanadium.viml.handler.CommandHandler
 import dev.vanadium.viml.handler.validateArguments
 import dev.vanadium.viml.reflect.findAllCommandHandlers
 
 class Runtime(val script: Script) {
 
-    var variables: ArrayList<Variable> = arrayListOf()
+    var variables: HashMap<String, ExpressionNode> = hashMapOf()
     var commandHandlers: HashMap<String, CommandHandler> = hashMapOf()
 
     init {
-        findAllCommandHandlers().forEach { t, u ->
+        findAllCommandHandlers().forEach { (t, u) ->
             registerCommand(t, u)
         }
     }
 
-    fun findVariable(id: String): Variable {
-        return variables.filter { it.id == id }.firstOrNull()
-            ?: throw IllegalStateException("Trying to find an unknown variable in a runtime operation \"${id}\".")
+    fun findVariable(id: String): ExpressionNode? {
+        return variables[id]
     }
 
     fun registerCommand(label: String, handler: CommandHandler) {
@@ -38,6 +35,13 @@ class Runtime(val script: Script) {
     private fun runNode(node: Node) {
         if (node is CommandNode)
             runCommand(node)
+
+        if (node is VariableAssignment)
+            assignVariable(node)
+    }
+
+    private fun assignVariable(assignment: VariableAssignment) {
+        variables[assignment.id] = assignment.value
     }
 
     private fun runCommand(node: CommandNode) {
@@ -46,7 +50,8 @@ class Runtime(val script: Script) {
 
         // Make sure all command arguments are as atomic as possible
         node.args.forEach { (t, u) ->
-            node.args[t] = u.reduceToAtomic(this)
+            val atomic = u.reduceToAtomic(this)
+            node.args[t] = atomic
         }
 
         val handler = commandHandlers[node.label]!!

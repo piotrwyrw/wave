@@ -35,7 +35,7 @@ class Parser(val tokenizer: Tokenizer) {
     }
 
     fun parseNext(): Node {
-        if (compareToken(currentToken, TokenType.IDENTIFIER)) {
+        if (compareToken(currentToken, TokenType.IDENTIFIER) && !compareToken(nextToken, TokenType.EQUALS)) {
             return parseCommand()
         }
 
@@ -104,6 +104,10 @@ class Parser(val tokenizer: Tokenizer) {
             return parseArray()
         }
 
+        if (compareToken(currentToken, TokenType.IDENTIFIER)) {
+            return parseVariableAssignment()
+        }
+
         if (compareToken(currentToken, TokenType.DOLLARSIGN)) {
             return parseVariableReferenceExpression()
         }
@@ -126,7 +130,7 @@ class Parser(val tokenizer: Tokenizer) {
             throw SyntaxError("Expected integer literal, got ${currentToken.type} on line ${currentToken.line}")
         }
 
-        val literal = LiteralExpression(parseDouble(currentToken.value), currentToken.line)
+        val literal = LiteralExpression<Double>(parseDouble(currentToken.value), currentToken.line)
 
         consume()
 
@@ -143,6 +147,27 @@ class Parser(val tokenizer: Tokenizer) {
         consume()
 
         return literal
+    }
+
+    fun parseVariableAssignment(): VariableAssignment {
+        if (!compareToken(currentToken, TokenType.IDENTIFIER)) {
+            throw SyntaxError("Expected an identifier at the beginning of a variable reference, got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        val line = currentToken.line
+        val id = currentToken.value
+
+        consume() // Skip id
+
+        if (!compareToken(currentToken, TokenType.EQUALS)) {
+            throw RuntimeException("Expected '=' after identifier, got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        consume() // Skip '='
+
+        val expr = parseExpression()
+
+        return VariableAssignment(id, expr, line)
     }
 
     fun parseVariableReferenceExpression(): VariableReferenceExpression {

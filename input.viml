@@ -1,4 +1,7 @@
-print "Hello, World!";
-print "One plus two equals " + (1 + 2) + " and one over four evaluates to " + (1 / 4);
+red = [255, 0, 0]
+white = [255, 255, 255]
 
-canvas width 123 height 100 background [255, 255, 0];
+canvas width 123 height 100 background $red;
+color $white;
+line from [0, 0] to [100, 100];
+write file "output.png";

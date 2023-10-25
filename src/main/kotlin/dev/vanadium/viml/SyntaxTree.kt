@@ -5,6 +5,9 @@ import dev.vanadium.viml.analysis.lexical.TokenType
 import dev.vanadium.viml.exception.SyntaxError
 import dev.vanadium.viml.runtime.Runtime
 
+val DOUBLE_TYPE = java.lang.Double::class.java
+val STRING_TYPE = java.lang.String::class.java
+
 class Script(val nodes: List<Node>) {
 
     fun printAllNodes() {
@@ -77,7 +80,7 @@ abstract class ExpressionNode(line: Int) : Node(line) {
 }
 
 
-class LiteralExpression<T>(
+class LiteralExpression<T : Any>(
     val value: T,
     line: Int
 ) : ExpressionNode(line) {
@@ -92,6 +95,16 @@ class LiteralExpression<T>(
 
     override fun string(): String {
         return value.toString()
+    }
+
+    fun ifTypeNot(clazz: Class<*>, callback: (actualType: Class<*>) -> Unit): LiteralExpression<T> {
+        val type = value::class.java
+
+        if (type.isAssignableFrom(clazz))
+            return this
+
+        callback(type)
+        return this
     }
 
     override fun add(another: ExpressionNode): ExpressionNode {
@@ -156,6 +169,7 @@ class ArrayExpression(
 
     override fun reduceToAtomic(runtime: Runtime): ArrayExpression {
         val atomicValues: ArrayList<ExpressionNode> = arrayListOf()
+
         value.forEachIndexed { index, node ->
             atomicValues.add(value[index].reduceToAtomic(runtime))
         }
@@ -173,9 +187,19 @@ class ArrayExpression(
             return this
         }
 
-        value.forEach {
-            if (initial::class.java != it::class.java)
-                throw RuntimeException("An array may only be made up of a single type of elements: Error on line \"${line}\"")
+        if (initial !is LiteralExpression<*>) {
+            throw RuntimeException("Array expression not atomic enough on line ${line}.")
+        }
+
+        val initialType = initial.value::class.java
+
+        value.forEachIndexed { index, it ->
+            if (it !is LiteralExpression<*>) {
+                throw RuntimeException("Array expression at index ${index} not atomic enough on line ${line}.")
+            }
+
+            if (it.value::class.java != initialType)
+                throw RuntimeException("An array may only be made up of a single type of elements: Error on line ${line}")
         }
 
         type = initial::class.java
@@ -183,14 +207,13 @@ class ArrayExpression(
         return this
     }
 
-    fun isNumberArray(runtime: Runtime, length: IntRange? = null): Boolean {
-        val arr = reduceToAtomic(runtime).validateTypes()
-        if (arr.type != LiteralExpression::class.java)
+    fun checkAgainst(clazz: Class<*>, length: IntRange? = null): Boolean {
+        if (type != LiteralExpression::class.java)
             return false
-        val initial = arr.value.firstOrNull() ?: return length == null || length.min() == 0
-        if ((initial as LiteralExpression<*>).value !is Double)
+        val initial = value.firstOrNull() ?: return length == null || length.min() == 0
+        if (!((initial as LiteralExpression<*>).value)::class.java.isAssignableFrom(clazz))
             return false
-        if (length != null && !length.contains(arr.value.size)) return false
+        if (length != null && !length.contains(value.size)) return false
         return true
     }
 
@@ -204,7 +227,11 @@ class VariableReferenceExpression(
         println(indentation(indent) + "Variable: ${id}")
     }
 
-    override fun reduceToAtomic(runtime: Runtime): ExpressionNode = runtime.findVariable(id).value
+    override fun reduceToAtomic(runtime: Runtime): ExpressionNode {
+        val expr = runtime.findVariable(id)
+            ?: throw RuntimeException("Referenced unknown variable \"${id}\" on line ${line}.")
+        return expr.reduceToAtomic(runtime)
+    }
 }
 
 class InterpolationExpression(
@@ -287,4 +314,18 @@ class CommandNode(
             println(indentation(indent + 1) + "- No arguments -")
         }
     }
+}
+
+class VariableAssignment(
+    val id: String,
+    val value: ExpressionNode,
+    line: Int
+) : ExpressionNode(line) {
+    override fun print(indent: Int) {
+        println(indentation(indent) + "Variable assignment \"${id}\":")
+        value.print(indent + 1)
+    }
+
+    override fun reduceToAtomic(runtime: Runtime): ExpressionNode = value.reduceToAtomic(runtime)
+
 }
