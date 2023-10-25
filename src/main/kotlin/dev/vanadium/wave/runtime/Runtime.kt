@@ -38,6 +38,26 @@ class Runtime(val script: Script) {
 
         if (node is VariableAssignment)
             assignVariable(node)
+
+        if (node is RepeatNode)
+            runRepeatStatement(node)
+    }
+
+    private fun runRepeatStatement(repeat: RepeatNode) {
+        val count = repeat.count.reduceToAtomic(this).reduceToAtomic(this)
+
+        if (count !is LiteralExpression<*>)
+            throw RuntimeException("Expected literal expression for target value in repeat statement on line ${repeat.line}, got ${count::class.simpleName}")
+
+        if (count.value !is Double)
+            throw RuntimeException("The target value in repeat statement is meant to be a number, got ${count.value::class.simpleName}")
+
+        repeat(count.value.toInt()) {
+            assignVariable(VariableAssignment(repeat.variable.value, LiteralExpression<Double>(it.toDouble(), repeat.line), false, repeat.line))
+            repeat.blocK.nodes.forEach {
+                runNode(it)
+            }
+        }
     }
 
     private fun assignVariable(assignment: VariableAssignment) {
@@ -49,22 +69,24 @@ class Runtime(val script: Script) {
         if (!commandHandlers.containsKey(node.label))
             throw RuntimeException("Undefined command \"${node.label}\" on line ${node.line}")
 
+        var atomicArgs: HashMap<String, ExpressionNode> = hashMapOf()
+
         // Make sure all command arguments are as atomic as possible
         node.args.forEach { (t, u) ->
             val atomic = u.reduceToAtomic(this)
-            node.args[t] = atomic
+            atomicArgs[t] = atomic
         }
 
         val handler = commandHandlers[node.label]!!
 
-        val validators = handler.validateArguments(node.args, this)
+        val validators = handler.validateArguments(atomicArgs, this)
 
         if (validators != null) {
-            validateArguments(node.label, node.line, node.args, validators)
+            validateArguments(node.label, node.line, atomicArgs, validators)
         }
 
-        handler.preflight(node.args, this, node.line)
-        handler.invoke(node.args, this, node.line)
+        handler.preflight(atomicArgs, this, node.line)
+        handler.invoke(atomicArgs, this, node.line)
     }
 
 }

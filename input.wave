@@ -1,1 +1,13 @@
-print (0 -> 10) @ 50;
+canvas_width = 1000
+canvas_height = 1000
+
+canvas width $canvas_width height $canvas_height background [0, 0, 0];
+
+color [255, 255, 255, 100];
+
+repeat i --> 200 {
+    line from [0, 0] to [$canvas_width, $i * 7];
+    line from [$canvas_width, $canvas_height] to [0, $canvas_height - $i * 7];
+}
+
+write file "output.png";

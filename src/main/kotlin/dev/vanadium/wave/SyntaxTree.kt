@@ -6,7 +6,6 @@ import dev.vanadium.wave.exception.SyntaxError
 import dev.vanadium.wave.runtime.Runtime
 import kotlin.math.abs
 import kotlin.math.pow
-import kotlin.math.sign
 
 val DOUBLE_TYPE = java.lang.Double::class.java
 val STRING_TYPE = java.lang.String::class.java
@@ -104,6 +103,12 @@ class LiteralExpression<T : Any>(
     val value: T,
     line: Int
 ) : ExpressionNode(line) {
+
+    init {
+        if (value !is Double && value !is String)
+            throw RuntimeException("A literal expression is expected to be either Double or String, gpt ${value::class.simpleName} on line ${line}")
+    }
+
     override fun print(indent: Int) {
         println(indentation(indent) + "Literal \"${value}\"")
     }
@@ -261,7 +266,7 @@ class ArrayExpression(
         if (at.value !is Double)
             throw RuntimeException("Evaluation point is supposed to be a number, got ${at.value::class.simpleName} on line ${line}.")
 
-        if (at.value.toInt() !in 0..< value.size)
+        if (at.value.toInt() !in 0..<value.size)
             throw RuntimeException("Cannot access item on index ${at.value.toInt()} of array of length ${value.size}.")
 
         return value.get(at.value.toInt())
@@ -475,5 +480,38 @@ class PowerExpression(
             throw RuntimeException("Exponential degree must be a number.")
         return LiteralExpression(atomic.value.pow(power.value), line)
     }
+}
 
+class RepeatNode(
+    val count: ExpressionNode,
+    val blocK: BlockNode,
+    val variable: Token,
+    line: Int
+) : StatementNode(line) {
+
+    init {
+        if (variable.type != TokenType.IDENTIFIER)
+            throw RuntimeException("Target variable name is expected to be an identifier, got ${variable.type} in RepeatNode on line ${line}")
+    }
+
+    override fun print(indent: Int) {
+        println(indentation(indent) + "Repeat (${variable}):")
+        println(indentation(indent + 1) + "Count:")
+        count.print(indent + 2);
+
+        blocK.print(indent + 1)
+    }
+
+}
+
+class BlockNode(
+    val nodes: List<Node>,
+    line: Int
+) : StatementNode(line) {
+    override fun print(indent: Int) {
+        println(indentation(indent) + "Block:")
+        nodes.forEach {
+            it.print(indent + 1)
+        }
+    }
 }

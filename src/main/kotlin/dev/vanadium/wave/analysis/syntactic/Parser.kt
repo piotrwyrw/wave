@@ -35,7 +35,15 @@ class Parser(val tokenizer: Tokenizer) {
     }
 
     fun parseNext(): Node {
-        if ((compareToken(currentToken, TokenType.IDENTIFIER) && !compareToken(nextToken, TokenType.EQUALS)) && !compareToken(currentToken, "invariable")) {
+        if (compareToken(currentToken, "repeat")) {
+            return parseRepeat();
+        }
+
+        if ((compareToken(currentToken, TokenType.IDENTIFIER) && !compareToken(
+                nextToken,
+                TokenType.EQUALS
+            )) && !compareToken(currentToken, "invariable")
+        ) {
             return parseCommand()
         }
 
@@ -260,6 +268,64 @@ class Parser(val tokenizer: Tokenizer) {
         consume() // Skip ')'
 
         return ArrayExpression(expressions, line)
+    }
+
+    fun parseRepeat(): RepeatNode {
+        if (!compareToken(currentToken, "repeat")) {
+            throw RuntimeException("Epxected 'repeat' at the beginning of a repeat statement, got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        val line = currentToken.line
+
+        consume() // Skip 'repeat'
+
+        if (!compareToken(currentToken, TokenType.IDENTIFIER)) {
+            throw RuntimeException("Expected variable identifier after 'repeat', got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        val variable = currentToken
+
+        consume() // Skip variable identifier
+
+        if (!compareToken(currentToken, TokenType.APPROACHES)) {
+            throw RuntimeException("Expected '-->' operator after variable name, got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        consume() // Skip '-->'
+
+        val target = parseExpression()
+
+        if (!compareToken(currentToken, TokenType.LCURLY)) {
+            throw RuntimeException("Expected '{' after repeat expression, got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        val block = parseBlock()
+
+        return RepeatNode(target, block, variable, line)
+    }
+
+    fun parseBlock(): BlockNode {
+        if (!compareToken(currentToken, TokenType.LCURLY)) {
+            throw RuntimeException("Expected '{' at the beginning of a block statement, got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        val line = currentToken.line
+
+        consume() // Skip '{'
+
+        val nodes: ArrayList<Node> = arrayListOf()
+
+        while (!compareToken(currentToken, TokenType.RCURLY) && !compareToken(currentToken, TokenType.UNDEFINED)) {
+            nodes.add(parseNext())
+        }
+
+        if (!compareToken(currentToken, TokenType.RCURLY)) {
+            throw RuntimeException("Reached end of file while parsing block statement starting on line ${line}.")
+        }
+
+        consume() // SKip '}'
+
+        return BlockNode(nodes, line)
     }
 
     fun parseCommand(): CommandNode {

@@ -46,6 +46,11 @@ class Canvas {
         graphics!!.drawLine(fromX, fromY, toX, toY)
     }
 
+    fun rect(fromX: Int, fromY: Int, toX: Int, toY: Int) {
+        checkInitialized()
+        graphics!!.drawRect(fromX, fromY, toX - fromX, toY - fromY)
+    }
+
     fun graphics(): Graphics2D? {
         return this.graphics
     }

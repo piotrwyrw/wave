@@ -8,6 +8,8 @@ enum class TokenType(val value: String? = null) {
     RPAREN(")"),
     LBRACKET("["),
     RBRACKET("]"),
+    LCURLY("{"),
+    RCURLY("}"),
 
     IDENTIFIER,
 
@@ -29,7 +31,8 @@ enum class TokenType(val value: String? = null) {
     AT("@"),
 
     // Complex tokens
-    POINT_RIGHT("->")
+    POINT_RIGHT("->"),
+    APPROACHES("-->");
 
 }
 
