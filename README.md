@@ -1,3 +1,3 @@
-# Visual Markup Language
+# Vanadium Wave
 
 Logo but better

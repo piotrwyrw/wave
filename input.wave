@@ -1,0 +1,11 @@
+canvas_width = 100
+canvas_height = 100
+
+background_color = ([255, 255, 255, 0] + [0, 0, 0, 100]) - [10, 10, 100, 0]
+foreground_color = [255, 255, 255]
+
+canvas width $canvas_width height $canvas_height background $background_color;
+color $foreground_color;
+line from [0, 0] to [$canvas_width, $canvas_height];
+line from [0, $canvas_height] to [$canvas_width, 0];
+write file "output.png";

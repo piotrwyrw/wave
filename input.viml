@@ -1,7 +1,0 @@
-red = [255, 0, 0]
-white = [255, 255, 255]
-
-canvas width 123 height 100 background $red;
-color $white;
-line from [0, 0] to [100, 100];
-write file "output.png";
