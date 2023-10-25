@@ -11,7 +11,6 @@ fun main() {
     val parser = Parser(tokenizer)
 
     val script = parser.parseScript()
-//    script.printAllNodes()
 
     val runtime = Runtime(script)
 

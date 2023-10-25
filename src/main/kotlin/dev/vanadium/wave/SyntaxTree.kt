@@ -5,8 +5,8 @@ import dev.vanadium.wave.analysis.lexical.TokenType
 import dev.vanadium.wave.exception.SyntaxError
 import dev.vanadium.wave.runtime.Runtime
 import kotlin.math.abs
-import kotlin.math.exp
 import kotlin.math.pow
+import kotlin.math.sign
 
 val DOUBLE_TYPE = java.lang.Double::class.java
 val STRING_TYPE = java.lang.String::class.java
@@ -61,6 +61,8 @@ abstract class ExpressionNode(line: Int) : Node(line) {
             BinaryOperation.SUBTRACT -> subtract(another)
             BinaryOperation.MULTIPLY -> multiply(another)
             BinaryOperation.DIVIDE -> divide(another)
+            BinaryOperation.POWER -> power(another)
+            BinaryOperation.EVALUATE_AT -> evaluateAt(another)
         }
     }
 
@@ -83,8 +85,14 @@ abstract class ExpressionNode(line: Int) : Node(line) {
     open fun divide(another: ExpressionNode): ExpressionNode =
         throw RuntimeException("Illegal division operation on ${this::class.java.simpleName} on line ${line}")
 
+    open fun power(another: ExpressionNode): ExpressionNode =
+        throw RuntimeException("Illegal power operation on ${this::class.java.simpleName} on line ${line}")
+
     open fun magnitude(): ExpressionNode =
         throw RuntimeException("Illegal magnitude operation on ${this::class.java.simpleName} on line ${line}")
+
+    open fun evaluateAt(at: ExpressionNode): ExpressionNode =
+        throw RuntimeException("Illegal evaluate at operation on ${this::class.java.simpleName} on line ${line}")
 
     open fun string(): String =
         throw RuntimeException("The object \"${this::class.java.simpleName}\" does not support string conversions. Attempted on line ${line}")
@@ -101,7 +109,7 @@ class LiteralExpression<T : Any>(
     }
 
     override fun allOperations(another: ExpressionNode, operator: BinaryOperation): ExpressionNode? {
-        if (another !is LiteralExpression<*> && value !is String) throw RuntimeException("Cannot add a non-literal to a literal on line ${line}")
+        if (another !is LiteralExpression<*> && value !is String) throw RuntimeException("Cannot perform a binary operation on a literal and a complex on line ${line}")
         return null
     }
 
@@ -157,6 +165,12 @@ class LiteralExpression<T : Any>(
         return LiteralExpression(value as Double / (another as LiteralExpression<*>).value as Double, line)
     }
 
+    override fun power(another: ExpressionNode): ExpressionNode {
+        checkIsNumber(another, BinaryOperation.POWER)
+
+        return PowerExpression(this, another, line)
+    }
+
     override fun magnitude(): ExpressionNode {
         return when (value::class) {
             String::class -> LiteralExpression((value as String).length, line)
@@ -167,7 +181,7 @@ class LiteralExpression<T : Any>(
 
     private fun checkIsNumber(another: ExpressionNode, operator: BinaryOperation) {
         if (value is String || another !is LiteralExpression<*>) throw RuntimeException("Invalid operation candidates for operation ${operator}: ${this::class.simpleName} and ${another::class.simpleName} on line ${line}")
-        if (another.value !is Double) throw RuntimeException("Invalid operation candidates for operation ${operator}: ${this::class.simpleName} and ${another::class.simpleName} on line ${line}")
+        if (another.value !is Double) throw RuntimeException("Invalid operation candidates for operation ${operator}: ${this.value::class.simpleName} and ${another.value::class.simpleName} on line ${line}")
     }
 
 }
@@ -223,16 +237,34 @@ class ArrayExpression(
         if (value.size == 0)
             return LiteralExpression(0.0, line)
 
-        var left: ExpressionNode = PowerExpression(value.first(), 2.0, line)
+        var left: ExpressionNode = PowerExpression(value.first(), LiteralExpression(2.0, line), line)
 
         value.forEachIndexed { index, expressionNode ->
             if (index == 0)
                 return@forEachIndexed
 
-            left = BinaryExpressionNode(left, PowerExpression(expressionNode, 2.0, line), BinaryOperation.ADD, line)
+            left = BinaryExpressionNode(
+                left,
+                PowerExpression(expressionNode, LiteralExpression(2.0, line), line),
+                BinaryOperation.ADD,
+                line
+            )
         }
 
-        return PowerExpression(left, 1.0 / 2.0, line)
+        return PowerExpression(left, LiteralExpression(1.0 / 2.0, line), line)
+    }
+
+    override fun evaluateAt(at: ExpressionNode): ExpressionNode {
+        if (at !is LiteralExpression<*>)
+            throw RuntimeException("Evaluation point is not atomic enough on line ${line}.")
+
+        if (at.value !is Double)
+            throw RuntimeException("Evaluation point is supposed to be a number, got ${at.value::class.simpleName} on line ${line}.")
+
+        if (at.value.toInt() !in 0..< value.size)
+            throw RuntimeException("Cannot access item on index ${at.value.toInt()} of array of length ${value.size}.")
+
+        return value.get(at.value.toInt())
     }
 
     override fun reduceToAtomic(runtime: Runtime): ArrayExpression {
@@ -267,7 +299,7 @@ class ArrayExpression(
             }
 
             if (it.value::class.java != initialType)
-                throw RuntimeException("An array may only be made up of a single type of elements: Error on line ${line}")
+                throw RuntimeException("An array may only be made up of a single type of element: Error on line ${line}")
         }
 
         type = initial::class.java
@@ -321,7 +353,9 @@ enum class BinaryOperation {
     ADD,
     SUBTRACT,
     MULTIPLY,
-    DIVIDE;
+    DIVIDE,
+    POWER,
+    EVALUATE_AT;
 }
 
 fun binaryOperationFromToken(token: Token): BinaryOperation {
@@ -330,6 +364,8 @@ fun binaryOperationFromToken(token: Token): BinaryOperation {
         TokenType.SLASH -> BinaryOperation.DIVIDE
         TokenType.MINUS -> BinaryOperation.SUBTRACT
         TokenType.ASTERISK -> BinaryOperation.MULTIPLY
+        TokenType.HAT -> BinaryOperation.POWER
+        TokenType.AT -> BinaryOperation.EVALUATE_AT
         else -> throw SyntaxError("Unknown binary operator ${token.type} on line ${token.line}")
     }
 }
@@ -404,6 +440,7 @@ class CommandNode(
 class VariableAssignment(
     val id: String,
     val value: ExpressionNode,
+    val invariable: Boolean = false,
     line: Int
 ) : ExpressionNode(line) {
     override fun print(indent: Int) {
@@ -417,7 +454,7 @@ class VariableAssignment(
 
 class PowerExpression(
     val expression: ExpressionNode,
-    val power: Double,
+    val power: ExpressionNode,
     line: Int
 ) : ExpressionNode(line) {
     override fun print(indent: Int) {
@@ -431,7 +468,12 @@ class PowerExpression(
             throw RuntimeException("Exponential expression not atomic enough on line ${line}.")
         if (atomic.value !is Double)
             throw RuntimeException("Exponential expression must be a number. Error on line ${line}.")
-        return LiteralExpression(atomic.value.pow(power), line)
+        val power: ExpressionNode = power.reduceToAtomic(runtime)
+        if (power !is LiteralExpression<*>)
+            throw RuntimeException("Exponential degree not atomic enough")
+        if (power.value !is Double)
+            throw RuntimeException("Exponential degree must be a number.")
+        return LiteralExpression(atomic.value.pow(power.value), line)
     }
 
 }

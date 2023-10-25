@@ -41,7 +41,8 @@ class Runtime(val script: Script) {
     }
 
     private fun assignVariable(assignment: VariableAssignment) {
-        variables[assignment.id] = assignment.value
+        variables[assignment.id] =
+            if (!assignment.invariable) assignment.value else assignment.value.reduceToAtomic(this).reduceToAtomic(this)
     }
 
     private fun runCommand(node: CommandNode) {

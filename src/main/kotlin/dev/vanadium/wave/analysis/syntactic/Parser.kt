@@ -35,7 +35,7 @@ class Parser(val tokenizer: Tokenizer) {
     }
 
     fun parseNext(): Node {
-        if (compareToken(currentToken, TokenType.IDENTIFIER) && !compareToken(nextToken, TokenType.EQUALS)) {
+        if ((compareToken(currentToken, TokenType.IDENTIFIER) && !compareToken(nextToken, TokenType.EQUALS)) && !compareToken(currentToken, "invariable")) {
             return parseCommand()
         }
 
@@ -78,7 +78,11 @@ class Parser(val tokenizer: Tokenizer) {
     fun parseMultiplicativeExpression(): ExpressionNode {
         var left = parseExpressionAtom()
 
-        while (compareToken(currentToken, TokenType.ASTERISK) || compareToken(currentToken, TokenType.SLASH)) {
+        while (compareToken(currentToken, TokenType.ASTERISK) || compareToken(
+                currentToken,
+                TokenType.SLASH
+            ) || compareToken(currentToken, TokenType.HAT) || compareToken(currentToken, TokenType.AT)
+        ) {
             val op = binaryOperationFromToken(currentToken)
 
             consume() // Skip the operator
@@ -174,6 +178,13 @@ class Parser(val tokenizer: Tokenizer) {
     }
 
     fun parseVariableAssignment(): VariableAssignment {
+        var invariable = false
+
+        if (compareToken(currentToken, "invariable")) {
+            invariable = true
+            consume(); // Skip the qualifier
+        }
+
         if (!compareToken(currentToken, TokenType.IDENTIFIER)) {
             throw SyntaxError("Expected an identifier at the beginning of a variable reference, got ${currentToken.type} on line ${currentToken.line}")
         }
@@ -191,7 +202,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         val expr = parseExpression()
 
-        return VariableAssignment(id, expr, line)
+        return VariableAssignment(id, expr, invariable, line)
     }
 
     fun parseVariableReferenceExpression(): VariableReferenceExpression {

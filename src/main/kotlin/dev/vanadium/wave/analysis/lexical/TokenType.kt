@@ -25,6 +25,8 @@ enum class TokenType(val value: String? = null) {
     DOLLARSIGN("$"),
     EQUALS("="),
     VBAR("|"),
+    HAT("^"),
+    AT("@"),
 
     // Complex tokens
     POINT_RIGHT("->")

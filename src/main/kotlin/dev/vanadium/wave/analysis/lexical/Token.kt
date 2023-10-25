@@ -11,7 +11,7 @@ class Token(val type: TokenType, val value: String, val line: Int) {
 fun compareToken(token: Token?, identifier: String): Boolean {
     token ?: return false
 
-    return token.value == identifier
+    return token.value == identifier && token.type == TokenType.IDENTIFIER
 }
 
 fun compareToken(token: Token?, type: TokenType): Boolean {
