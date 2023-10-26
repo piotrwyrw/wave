@@ -32,19 +32,26 @@ class Runtime(val script: Script) {
             runNode(node)
     }
 
-    private fun runNode(node: Node) {
-        if (node is CommandNode)
+    private fun runNode(node: Node): ExpressionNode? {
+        if (node is CommandNode) {
             runCommand(node)
+            return null
+        }
 
-        if (node is VariableAssignment)
+        if (node is VariableAssignment) {
             assignVariable(node)
+            return null
+        }
 
-        if (node is RepeatNode)
-            runRepeatStatement(node)
+        if (node is RepeatNode) {
+            return runRepeatStatement(node)
+        }
+
+        return null
     }
 
-    private fun runRepeatStatement(repeat: RepeatNode) {
-        val count = repeat.count.reduceToAtomic(this).reduceToAtomic(this)
+    private fun runRepeatStatement(repeat: RepeatNode): ExpressionNode? {
+        val count = repeat.count.atomic(this)
 
         if (count !is LiteralExpression<*>)
             throw RuntimeException("Expected literal expression for target value in repeat statement on line ${repeat.line}, got ${count::class.simpleName}")
@@ -53,27 +60,41 @@ class Runtime(val script: Script) {
             throw RuntimeException("The target value in repeat statement is meant to be a number, got ${count.value::class.simpleName}")
 
         repeat(count.value.toInt()) {
-            assignVariable(VariableAssignment(repeat.variable.value, LiteralExpression<Double>(it.toDouble(), repeat.line), false, repeat.line))
-            repeat.blocK.nodes.forEach {
-                runNode(it)
-            }
+            assignVariable(
+                VariableAssignment(
+                    repeat.variable.value,
+                    LiteralExpression<Double>(it.toDouble(), repeat.line),
+                    false,
+                    repeat.line
+                )
+            )
+            return runBlock(repeat.block) ?: return@repeat
         }
+
+        return null
+    }
+
+    private fun runBlock(block: BlockNode): ExpressionNode? {
+        block.nodes.forEach {
+            return runNode(it) ?: return@forEach
+        }
+        return null
     }
 
     private fun assignVariable(assignment: VariableAssignment) {
         variables[assignment.id] =
-            if (!assignment.invariable) assignment.value else assignment.value.reduceToAtomic(this).reduceToAtomic(this)
+            if (!assignment.invariable) assignment.value else assignment.value.atomic(this)
     }
 
     private fun runCommand(node: CommandNode) {
         if (!commandHandlers.containsKey(node.label))
             throw RuntimeException("Undefined command \"${node.label}\" on line ${node.line}")
 
-        var atomicArgs: HashMap<String, ExpressionNode> = hashMapOf()
+        val atomicArgs: HashMap<String, ExpressionNode> = hashMapOf()
 
         // Make sure all command arguments are as atomic as possible
         node.args.forEach { (t, u) ->
-            val atomic = u.reduceToAtomic(this)
+            val atomic = u.reduce(this)
             atomicArgs[t] = atomic
         }
 

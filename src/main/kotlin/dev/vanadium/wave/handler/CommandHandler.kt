@@ -11,7 +11,9 @@ interface CommandHandler {
         command(args, Canvas.instance(), runtime, line)
     }
 
-    open fun validateArguments(args: HashMap<String, ExpressionNode>, runtime: Runtime): Array<ArgumentValidation>? = null
+    open fun validateArguments(args: HashMap<String, ExpressionNode>, runtime: Runtime): Array<ArgumentValidation>? =
+        null
+
     open fun preflight(args: HashMap<String, ExpressionNode>, runtime: Runtime, line: Int) {}
     fun command(args: HashMap<String, ExpressionNode>, canvas: Canvas, runtime: Runtime, line: Int)
 

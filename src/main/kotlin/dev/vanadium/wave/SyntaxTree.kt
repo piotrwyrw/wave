@@ -2,6 +2,7 @@ package dev.vanadium.wave
 
 import dev.vanadium.wave.analysis.lexical.Token
 import dev.vanadium.wave.analysis.lexical.TokenType
+import dev.vanadium.wave.analysis.lexical.compareToken
 import dev.vanadium.wave.exception.SyntaxError
 import dev.vanadium.wave.runtime.Runtime
 import kotlin.math.abs
@@ -44,10 +45,13 @@ abstract class StatementNode(line: Int) : Node(line)
 abstract class ExpressionNode(line: Int) : Node(line) {
 
     /**
-     * Reduces the expression to its most atomic form.
-     * By default, assume the expression is already atomic
+     * Reduces the expression to a form that is (hopefully) more atomic
      */
-    open fun reduceToAtomic(runtime: Runtime): ExpressionNode = this
+    open fun reduce(runtime: Runtime): ExpressionNode = this
+
+    fun atomic(runtime: Runtime): ExpressionNode {
+        return reduce(runtime);
+    }
 
     fun binaryOperation(op: BinaryOperation, another: ExpressionNode): ExpressionNode {
         val allOps = allOperations(another, op)
@@ -103,6 +107,12 @@ class LiteralExpression<T : Any>(
     val value: T,
     line: Int
 ) : ExpressionNode(line) {
+
+    companion object {
+        fun zero(line: Int): LiteralExpression<Double> {
+            return LiteralExpression(0.0, line)
+        }
+    }
 
     init {
         if (value !is Double && value !is String)
@@ -272,11 +282,11 @@ class ArrayExpression(
         return value.get(at.value.toInt())
     }
 
-    override fun reduceToAtomic(runtime: Runtime): ArrayExpression {
+    override fun reduce(runtime: Runtime): ArrayExpression {
         val atomicValues: ArrayList<ExpressionNode> = arrayListOf()
 
         value.forEachIndexed { index, node ->
-            atomicValues.add(value[index].reduceToAtomic(runtime))
+            atomicValues.add(value[index].reduce(runtime))
         }
 
         return ArrayExpression(atomicValues, line).validateTypes()
@@ -332,10 +342,10 @@ class VariableReferenceExpression(
         println(indentation(indent) + "Variable: ${id}")
     }
 
-    override fun reduceToAtomic(runtime: Runtime): ExpressionNode {
+    override fun reduce(runtime: Runtime): ExpressionNode {
         val expr = runtime.findVariable(id)
             ?: throw RuntimeException("Referenced unknown variable \"${id}\" on line ${line}.")
-        return expr.reduceToAtomic(runtime)
+        return expr.reduce(runtime)
     }
 }
 
@@ -390,11 +400,11 @@ class BinaryExpressionNode(
         right.print(indent + 2)
     }
 
-    override fun reduceToAtomic(runtime: Runtime): ExpressionNode {
-        val leftAtomic = left.reduceToAtomic(runtime)
-        val rightAtomic = right.reduceToAtomic(runtime)
+    override fun reduce(runtime: Runtime): ExpressionNode {
+        val leftAtomic = left.reduce(runtime)
+        val rightAtomic = right.reduce(runtime)
 
-        return leftAtomic.binaryOperation(operator, rightAtomic).reduceToAtomic(runtime)
+        return leftAtomic.binaryOperation(operator, rightAtomic).reduce(runtime)
     }
 }
 
@@ -419,8 +429,8 @@ class UnaryOperationNode(
         expression.print(indent + 1)
     }
 
-    override fun reduceToAtomic(runtime: Runtime): ExpressionNode {
-        return expression.reduceToAtomic(runtime).unaryOperation(operator).reduceToAtomic(runtime)
+    override fun reduce(runtime: Runtime): ExpressionNode {
+        return expression.reduce(runtime).unaryOperation(operator).reduce(runtime)
     }
 
 }
@@ -453,7 +463,7 @@ class VariableAssignment(
         value.print(indent + 1)
     }
 
-    override fun reduceToAtomic(runtime: Runtime): ExpressionNode = value.reduceToAtomic(runtime)
+    override fun reduce(runtime: Runtime): ExpressionNode = value.reduce(runtime)
 
 }
 
@@ -467,13 +477,13 @@ class PowerExpression(
         expression.print(indent + 1)
     }
 
-    override fun reduceToAtomic(runtime: Runtime): ExpressionNode {
-        val atomic = expression.reduceToAtomic(runtime)
+    override fun reduce(runtime: Runtime): ExpressionNode {
+        val atomic = expression.reduce(runtime)
         if (atomic !is LiteralExpression<*>)
             throw RuntimeException("Exponential expression not atomic enough on line ${line}.")
         if (atomic.value !is Double)
             throw RuntimeException("Exponential expression must be a number. Error on line ${line}.")
-        val power: ExpressionNode = power.reduceToAtomic(runtime)
+        val power: ExpressionNode = power.reduce(runtime)
         if (power !is LiteralExpression<*>)
             throw RuntimeException("Exponential degree not atomic enough")
         if (power.value !is Double)
@@ -484,14 +494,13 @@ class PowerExpression(
 
 class RepeatNode(
     val count: ExpressionNode,
-    val blocK: BlockNode,
+    val block: BlockNode,
     val variable: Token,
     line: Int
 ) : StatementNode(line) {
-
     init {
         if (variable.type != TokenType.IDENTIFIER)
-            throw RuntimeException("Target variable name is expected to be an identifier, got ${variable.type} in RepeatNode on line ${line}")
+            throw SyntaxError("Target variable name is expected to be an identifier, got ${variable.type} in RepeatNode on line ${line}")
     }
 
     override fun print(indent: Int) {
@@ -499,7 +508,7 @@ class RepeatNode(
         println(indentation(indent + 1) + "Count:")
         count.print(indent + 2);
 
-        blocK.print(indent + 1)
+        block.print(indent + 1)
     }
 
 }
@@ -514,4 +523,31 @@ class BlockNode(
             it.print(indent + 1)
         }
     }
+}
+
+class FunctionDefinitionNode(
+    val name: Token,
+    val block: BlockNode,
+    line: Int
+) : StatementNode(line) {
+    override fun print(indent: Int) {
+        println(indentation(indent) + "Function definition (${name.value}):")
+        block.print(indent + 1)
+    }
+
+}
+
+class FunctionCall(
+    val name: Token,
+    line: Int
+) : ExpressionNode(line) {
+    init {
+        if (!compareToken(name, TokenType.IDENTIFIER))
+            throw SyntaxError("Function name is expected to be an identifier, got ${name.type} on line ${line}")
+    }
+
+    override fun print(indent: Int) {
+        println(indentation(indent) + "Function call (${name.value})")
+    }
+
 }

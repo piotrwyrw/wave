@@ -3,12 +3,15 @@ package dev.vanadium.wave.analysis.syntactic
 import dev.vanadium.wave.*
 import dev.vanadium.wave.analysis.lexical.*
 import dev.vanadium.wave.exception.SyntaxError
+import java.lang.Double.compare
 import java.lang.Double.parseDouble
 
 class Parser(val tokenizer: Tokenizer) {
 
     var currentToken: Token = undefinedToken(0)
     var nextToken: Token = undefinedToken(0)
+
+    val reserved: Array<String> = arrayOf("invariable", "fun", "repeat")
 
     lateinit var script: Script
 
@@ -36,18 +39,48 @@ class Parser(val tokenizer: Tokenizer) {
 
     fun parseNext(): Node {
         if (compareToken(currentToken, "repeat")) {
-            return parseRepeat();
+            return parseRepeat()
+        }
+
+        if (compareToken(currentToken, "fun")) {
+            return parseFunctionDefinition()
         }
 
         if ((compareToken(currentToken, TokenType.IDENTIFIER) && !compareToken(
                 nextToken,
                 TokenType.EQUALS
-            )) && !compareToken(currentToken, "invariable")
+            )) && !reserved.contains(currentToken.value)
         ) {
             return parseCommand()
         }
 
         return parseExpression()
+    }
+
+    fun parseFunctionDefinition(): FunctionDefinitionNode {
+        if (!compareToken(currentToken, "fun")) {
+            throw RuntimeException("Expected 'fun' at the beginning of a function definition, got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        val line = currentToken.line
+
+        consume() // SKip 'fun'
+
+        if (!compareToken(currentToken, TokenType.IDENTIFIER)) {
+            throw RuntimeException("Expected identifier after 'fun', got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        val id = currentToken
+
+        consume() // Skip id
+
+        if (!compareToken(currentToken, TokenType.LCURLY)) {
+            throw RuntimeException("Expected '{' after function identifier, got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        val block = parseBlock()
+
+        return FunctionDefinitionNode(id, block, line)
     }
 
     fun parseExpression(): ExpressionNode {

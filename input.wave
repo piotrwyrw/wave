@@ -5,9 +5,11 @@ canvas width $canvas_width height $canvas_height background [0, 0, 0];
 
 color [255, 255, 255, 100];
 
+fun drawRect {
+    rect from [10, 10] to [$i, $i];
+}
+
 repeat i --> 200 {
-    line from [0, 0] to [$canvas_width, $i * 7];
-    line from [$canvas_width, $canvas_height] to [0, $canvas_height - $i * 7];
 }
 
 write file "output.png";

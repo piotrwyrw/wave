@@ -1,3 +1,3 @@
 # Vanadium Wave
 
-Logo but better
+A language designed with graphical outputs in mind 

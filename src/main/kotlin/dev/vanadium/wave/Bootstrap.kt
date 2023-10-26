@@ -1,7 +1,7 @@
 package dev.vanadium.wave
 
-import dev.vanadium.wave.analysis.syntactic.Parser
 import dev.vanadium.wave.analysis.lexical.Tokenizer
+import dev.vanadium.wave.analysis.syntactic.Parser
 import dev.vanadium.wave.runtime.Runtime
 import dev.vanadium.wave.util.readFile
 import java.io.File

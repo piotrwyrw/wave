@@ -34,11 +34,11 @@ class LineCommand : CommandHandler {
         val from = args["from"]!! as ArrayExpression
         val to = args["to"]!! as ArrayExpression
 
-        if (!from.checkAgainst(DOUBLE_TYPE, 2 .. 2)) {
+        if (!from.checkAgainst(DOUBLE_TYPE, 2..2)) {
             throw RuntimeException("The \"from\" array of command \"${name()}\" has to be a number array and of length 2.")
         }
 
-        if (!to.checkAgainst(DOUBLE_TYPE, 2 .. 2)) {
+        if (!to.checkAgainst(DOUBLE_TYPE, 2..2)) {
             throw RuntimeException("The \"to\" array of command \"${name()}\" has to be a number array and of length 2.")
         }
 

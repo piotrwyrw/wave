@@ -3,7 +3,6 @@ package dev.vanadium.wave.gfx
 import dev.vanadium.wave.ArrayExpression
 import dev.vanadium.wave.LiteralExpression
 import java.awt.Color
-import java.lang.IllegalArgumentException
 
 class RGBAColor(val red: Int, val green: Int, val blue: Int, val alpha: Int = 255) {
 

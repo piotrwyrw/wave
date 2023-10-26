@@ -28,7 +28,7 @@ class ColorCommand : CommandHandler {
     override fun preflight(args: HashMap<String, ExpressionNode>, runtime: Runtime, line: Int) {
         val array = args["default"]!! as ArrayExpression
 
-        if (!array.checkAgainst(DOUBLE_TYPE, 3 .. 4)) {
+        if (!array.checkAgainst(DOUBLE_TYPE, 3..4)) {
             throw RuntimeException("The default argument of command \"${name()}\" is expected to be a number array of length 3 or 4. Error on line ${line}}.")
         }
 

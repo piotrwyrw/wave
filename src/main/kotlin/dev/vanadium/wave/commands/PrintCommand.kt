@@ -16,7 +16,7 @@ class PrintCommand : CommandHandler {
         return arrayOf(ArgumentValidation("default", ArgumentType.REQUIRED, LiteralExpression::class.java))
     }
 
-    override fun command(args: HashMap<String, ExpressionNode>, canvas: Canvas, runtime: Runtime,line: Int) {
+    override fun command(args: HashMap<String, ExpressionNode>, canvas: Canvas, runtime: Runtime, line: Int) {
         if (args["default"]!! !is LiteralExpression<*>) {
             println(args["default"]!!.string())
             return
