@@ -54,6 +54,7 @@ abstract class ExpressionNode(line: Int) : Node(line) {
         return this
     }
 
+    // TODO: White a better implementation for this function which doesn't guess the number of required reduction
     fun atomic(runtime: Runtime): ExpressionNode {
         return reduce(runtime).reduce(runtime)
     }

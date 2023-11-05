@@ -1,19 +1,18 @@
 decl canvasSize = 100
 decl pxX = 0
 decl pxY = 0
-decl instant pxColor = [0, 0, 0]
-
-proc drawPixel {
-    builtin color $pxColor
-    builtin rect from: [$pxX, $pxY], to: [$pxX, $pxY]
-}
 
 proc computePixelColor {
-    mut instant pxColor = [
+    return [
         ($pxX / $canvasSize) * 255,
         255 - (($pxX / $canvasSize) * 255),
         ($pxY / $canvasSize) * 255
     ]
+}
+
+proc drawPixel {
+    builtin color (run computePixelColor)
+    builtin rect from: [$pxX, $pxY], to: [$pxX, $pxY]
 }
 
 builtin canvas width: $canvasSize, height: $canvasSize
@@ -23,7 +22,6 @@ repeat x --> $canvasSize {
         mut pxX = $x
         mut pxY = $y
 
-        run computePixelColor
         run drawPixel
     }
 }

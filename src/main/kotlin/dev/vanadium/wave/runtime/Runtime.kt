@@ -67,6 +67,10 @@ class Runtime(val script: Script) {
             return runBlock(expr) ?: LiteralExpression(0.0, expr.line)
         }
 
+        if (expr is ArrayExpression) {
+            return expr.atomic(this)
+        }
+
         if (expr is VariableOperation) {
             assignVariable(expr)
             return expr
