@@ -8,6 +8,7 @@ import dev.vanadium.wave.reflect.findAllCommandHandlers
 class Runtime(val script: Script) {
 
     var variables: HashMap<String, ExpressionNode> = hashMapOf()
+    var functions: HashMap<String, FunctionDefinitionNode> = hashMapOf()
     var commandHandlers: HashMap<String, CommandHandler> = hashMapOf()
 
     init {
@@ -33,21 +34,56 @@ class Runtime(val script: Script) {
     }
 
     private fun runNode(node: Node): ExpressionNode? {
+        if (node is ExpressionNode) {
+            return processExpression(node)
+        }
+
         if (node is CommandNode) {
             runCommand(node)
             return null
         }
 
-        if (node is VariableAssignment) {
-            assignVariable(node)
+        if (node is ReturnNode) {
+            return processExpression(node.expression)
+        }
+
+        if (node is FunctionDefinitionNode) {
+            defineFunction(node)
             return null
         }
 
-        if (node is RepeatNode) {
-            return runRepeatStatement(node)
+        return null
+    }
+
+    fun processExpression(expr: ExpressionNode): ExpressionNode {
+        if (expr is FunctionCall) {
+            val fn: FunctionDefinitionNode = functions[expr.name.value]
+                ?: throw RuntimeException("Attempted call to an undefined function '${expr.name.value}' on line ${expr.line}")
+
+            return processExpression(fn.block)
         }
 
-        return null
+        if (expr is BlockNode) {
+            return runBlock(expr) ?: LiteralExpression(0.0, expr.line)
+        }
+
+        if (expr is VariableAssignment) {
+            assignVariable(expr)
+            return expr
+        }
+
+        if (expr is RepeatNode) {
+            return runRepeatStatement(expr) ?: LiteralExpression(0.0, expr.line)
+        }
+
+        return expr
+    }
+
+    private fun defineFunction(node: FunctionDefinitionNode) {
+        if (functions[node.name.value] != null)
+            throw RuntimeException("Attempted redefinition of function '${node.name.value}' on line ${node.line}. Original definition on line ${functions[node.name.value]!!.line}")
+
+        functions[node.name.value] = node
     }
 
     private fun runRepeatStatement(repeat: RepeatNode): ExpressionNode? {
@@ -63,7 +99,7 @@ class Runtime(val script: Script) {
             assignVariable(
                 VariableAssignment(
                     repeat.variable.value,
-                    LiteralExpression<Double>(it.toDouble(), repeat.line),
+                    LiteralExpression(it.toDouble(), repeat.line),
                     false,
                     repeat.line
                 )
@@ -76,14 +112,20 @@ class Runtime(val script: Script) {
 
     private fun runBlock(block: BlockNode): ExpressionNode? {
         block.nodes.forEach {
-            return runNode(it) ?: return@forEach
+            val retVal = runNode(it) ?: return@forEach
+
+            if (it !is ReturnNode)
+                return@forEach
+
+            return retVal
         }
         return null
     }
 
     private fun assignVariable(assignment: VariableAssignment) {
-        variables[assignment.id] =
-            if (!assignment.invariable) assignment.value else assignment.value.atomic(this)
+        variables[assignment.id] = processExpression(
+            if (!assignment.instant) assignment.value else assignment.value.atomic(this)
+        )
     }
 
     private fun runCommand(node: CommandNode) {
@@ -94,8 +136,8 @@ class Runtime(val script: Script) {
 
         // Make sure all command arguments are as atomic as possible
         node.args.forEach { (t, u) ->
-            val atomic = u.reduce(this)
-            atomicArgs[t] = atomic
+            val atomic = u.atomic(this)
+            atomicArgs[t] = processExpression(atomic).atomic(this)
         }
 
         val handler = commandHandlers[node.label]!!

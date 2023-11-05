@@ -47,10 +47,15 @@ abstract class ExpressionNode(line: Int) : Node(line) {
     /**
      * Reduces the expression to a form that is (hopefully) more atomic
      */
-    open fun reduce(runtime: Runtime): ExpressionNode = this
+    open fun reduce(runtime: Runtime): ExpressionNode {
+        if (javaClass.getAnnotation(RuntimeOutsourcedReduction::class.java) != null)
+            return runtime.processExpression(this)
+
+        return this
+    }
 
     fun atomic(runtime: Runtime): ExpressionNode {
-        return reduce(runtime);
+        return reduce(runtime).reduce(runtime)
     }
 
     fun binaryOperation(op: BinaryOperation, another: ExpressionNode): ExpressionNode {
@@ -286,7 +291,7 @@ class ArrayExpression(
         val atomicValues: ArrayList<ExpressionNode> = arrayListOf()
 
         value.forEachIndexed { index, node ->
-            atomicValues.add(value[index].reduce(runtime))
+            atomicValues.add(value[index].atomic(runtime))
         }
 
         return ArrayExpression(atomicValues, line).validateTypes()
@@ -345,7 +350,7 @@ class VariableReferenceExpression(
     override fun reduce(runtime: Runtime): ExpressionNode {
         val expr = runtime.findVariable(id)
             ?: throw RuntimeException("Referenced unknown variable \"${id}\" on line ${line}.")
-        return expr.reduce(runtime)
+        return expr.atomic(runtime)
     }
 }
 
@@ -401,10 +406,10 @@ class BinaryExpressionNode(
     }
 
     override fun reduce(runtime: Runtime): ExpressionNode {
-        val leftAtomic = left.reduce(runtime)
-        val rightAtomic = right.reduce(runtime)
+        val leftAtomic = left.atomic(runtime)
+        val rightAtomic = right.atomic(runtime)
 
-        return leftAtomic.binaryOperation(operator, rightAtomic).reduce(runtime)
+        return leftAtomic.binaryOperation(operator, rightAtomic).atomic(runtime)
     }
 }
 
@@ -430,7 +435,7 @@ class UnaryOperationNode(
     }
 
     override fun reduce(runtime: Runtime): ExpressionNode {
-        return expression.reduce(runtime).unaryOperation(operator).reduce(runtime)
+        return expression.atomic(runtime).unaryOperation(operator).atomic(runtime)
     }
 
 }
@@ -455,7 +460,7 @@ class CommandNode(
 class VariableAssignment(
     val id: String,
     val value: ExpressionNode,
-    val invariable: Boolean = false,
+    val instant: Boolean = false,
     line: Int
 ) : ExpressionNode(line) {
     override fun print(indent: Int) {
@@ -463,7 +468,7 @@ class VariableAssignment(
         value.print(indent + 1)
     }
 
-    override fun reduce(runtime: Runtime): ExpressionNode = value.reduce(runtime)
+    override fun reduce(runtime: Runtime): ExpressionNode = value.atomic(runtime)
 
 }
 
@@ -478,12 +483,12 @@ class PowerExpression(
     }
 
     override fun reduce(runtime: Runtime): ExpressionNode {
-        val atomic = expression.reduce(runtime)
+        val atomic = expression.atomic(runtime)
         if (atomic !is LiteralExpression<*>)
             throw RuntimeException("Exponential expression not atomic enough on line ${line}.")
         if (atomic.value !is Double)
             throw RuntimeException("Exponential expression must be a number. Error on line ${line}.")
-        val power: ExpressionNode = power.reduce(runtime)
+        val power: ExpressionNode = power.atomic(runtime)
         if (power !is LiteralExpression<*>)
             throw RuntimeException("Exponential degree not atomic enough")
         if (power.value !is Double)
@@ -497,7 +502,7 @@ class RepeatNode(
     val block: BlockNode,
     val variable: Token,
     line: Int
-) : StatementNode(line) {
+) : ExpressionNode(line) {
     init {
         if (variable.type != TokenType.IDENTIFIER)
             throw SyntaxError("Target variable name is expected to be an identifier, got ${variable.type} in RepeatNode on line ${line}")
@@ -513,10 +518,11 @@ class RepeatNode(
 
 }
 
+@RuntimeOutsourcedReduction
 class BlockNode(
     val nodes: List<Node>,
     line: Int
-) : StatementNode(line) {
+) : ExpressionNode(line) {
     override fun print(indent: Int) {
         println(indentation(indent) + "Block:")
         nodes.forEach {
@@ -549,5 +555,14 @@ class FunctionCall(
     override fun print(indent: Int) {
         println(indentation(indent) + "Function call (${name.value})")
     }
+}
 
+class ReturnNode(
+    val expression: ExpressionNode,
+    line: Int
+) : StatementNode(line) {
+    override fun print(indent: Int) {
+        println(indentation(indent) + "Return:")
+        expression.print(indent + 1)
+    }
 }

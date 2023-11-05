@@ -44,7 +44,7 @@ class Tokenizer(var inputString: String) {
             if (!isSpace(char))
                 break
 
-            val trimmedChar: Char = input.firstOrNull() ?: break
+            val trimmedChar: Char = char
 
             if (trimmedChar == '\n')
                 lineNumber++

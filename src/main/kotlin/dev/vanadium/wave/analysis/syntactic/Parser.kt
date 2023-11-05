@@ -3,7 +3,6 @@ package dev.vanadium.wave.analysis.syntactic
 import dev.vanadium.wave.*
 import dev.vanadium.wave.analysis.lexical.*
 import dev.vanadium.wave.exception.SyntaxError
-import java.lang.Double.compare
 import java.lang.Double.parseDouble
 
 class Parser(val tokenizer: Tokenizer) {
@@ -11,7 +10,7 @@ class Parser(val tokenizer: Tokenizer) {
     var currentToken: Token = undefinedToken(0)
     var nextToken: Token = undefinedToken(0)
 
-    val reserved: Array<String> = arrayOf("invariable", "fun", "repeat")
+    val reserved: Array<String> = arrayOf("instant", "fun", "repeat")
 
     lateinit var script: Script
 
@@ -38,12 +37,12 @@ class Parser(val tokenizer: Tokenizer) {
     }
 
     fun parseNext(): Node {
-        if (compareToken(currentToken, "repeat")) {
-            return parseRepeat()
-        }
-
         if (compareToken(currentToken, "fun")) {
             return parseFunctionDefinition()
+        }
+
+        if (compareToken(currentToken, "return")) {
+            return parseReturnStatement()
         }
 
         if ((compareToken(currentToken, TokenType.IDENTIFIER) && !compareToken(
@@ -83,6 +82,39 @@ class Parser(val tokenizer: Tokenizer) {
         return FunctionDefinitionNode(id, block, line)
     }
 
+    fun parseReturnStatement(): ReturnNode {
+        val line = currentToken.line;
+
+        if (!compareToken(currentToken, "return")) {
+            throw SyntaxError("Expected 'return' at the start of a return statement, got '${currentToken.type}' on line ${line}")
+        }
+
+        consume() // Skip 'return'
+
+        val expr = parseExpression();
+
+        return ReturnNode(expr, line)
+    }
+
+    fun parseFunctionCall(): FunctionCall {
+        if (!compareToken(currentToken, TokenType.IDENTIFIER)) {
+            throw SyntaxError("Expected identifier at the start of a function call, got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        val line = currentToken.line
+        val id = currentToken
+
+        consume() // SKip the function ID
+
+        if (!compareToken(currentToken, TokenType.EXCLAMATION)) {
+            throw SyntaxError("Expected '!' after function ID, got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        consume() // Skip '!'
+
+        return FunctionCall(id, line)
+    }
+
     fun parseExpression(): ExpressionNode {
         val expr = parseSimpleExpression()
 
@@ -94,6 +126,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         val to = parseSimpleExpression()
 
+        // TODO Move it to the SyntaxTree class probably
         if (expr::class != to::class)
             throw SyntaxError("The interpolation expression expects same types on both sides, got ${expr.javaClass.simpleName} and ${to.javaClass.simpleName} on line ${currentToken.line}.")
 
@@ -149,7 +182,7 @@ class Parser(val tokenizer: Tokenizer) {
             return parseArray()
         }
 
-        if (compareToken(currentToken, TokenType.IDENTIFIER)) {
+        if (compareToken(currentToken, TokenType.IDENTIFIER) && !compareToken(nextToken, TokenType.EXCLAMATION) && (!reserved.contains(currentToken.value) || currentToken.value == "instant")) {
             return parseVariableAssignment()
         }
 
@@ -169,6 +202,18 @@ class Parser(val tokenizer: Tokenizer) {
 
         if (compareToken(currentToken, TokenType.VBAR)) {
             return parseUnaryMagnitudeOperation()
+        }
+
+        if (compareToken(currentToken, TokenType.LCURLY)) {
+            return parseBlock()
+        }
+
+        if (compareToken(currentToken, TokenType.IDENTIFIER) && compareToken(nextToken, TokenType.EXCLAMATION)) {
+            return parseFunctionCall()
+        }
+
+        if (compareToken(currentToken, "repeat")) {
+            return parseRepeat()
         }
 
         throw SyntaxError("Unknown expression atom starting with ${currentToken.type} on line ${currentToken.line}")
@@ -219,10 +264,10 @@ class Parser(val tokenizer: Tokenizer) {
     }
 
     fun parseVariableAssignment(): VariableAssignment {
-        var invariable = false
+        var instant = false
 
-        if (compareToken(currentToken, "invariable")) {
-            invariable = true
+        if (compareToken(currentToken, "instant")) {
+            instant = true
             consume(); // Skip the qualifier
         }
 
@@ -243,7 +288,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         val expr = parseExpression()
 
-        return VariableAssignment(id, expr, invariable, line)
+        return VariableAssignment(id, expr, instant, line)
     }
 
     fun parseVariableReferenceExpression(): VariableReferenceExpression {
@@ -387,7 +432,7 @@ class Parser(val tokenizer: Tokenizer) {
         }
 
         // First, try parsing a default parameter
-        if (!compareToken(currentToken, TokenType.IDENTIFIER)) {
+        if (!compareToken(currentToken, TokenType.IDENTIFIER) || (compareToken(currentToken, TokenType.IDENTIFIER) && compareToken(nextToken, TokenType.EXCLAMATION))) {
             val expr = parseExpression()
             args.put("default", expr)
         }

@@ -29,6 +29,7 @@ enum class TokenType(val value: String? = null) {
     VBAR("|"),
     HAT("^"),
     AT("@"),
+    EXCLAMATION("!"),
 
     // Complex tokens
     POINT_RIGHT("->"),

@@ -9,10 +9,7 @@ import java.io.File
 fun main() {
     val tokenizer = Tokenizer(readFile(File("input.wave")))
     val parser = Parser(tokenizer)
-
     val script = parser.parseScript()
-
     val runtime = Runtime(script)
-
     runtime.run()
 }
