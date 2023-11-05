@@ -1,17 +1,31 @@
-canvas width 100 height 100 background [0, 0, 0];
+decl canvasSize = 100
+decl pxX = 0
+decl pxY = 0
+decl instant pxColor = [0, 0, 0]
 
-gradientX = $x / 100
-gradientY = $y / 100
-red = 255 * $gradientX
-green = 255 * $gradientY
-blue = 255 - (255 * $gradientY)
-clr = [$red, $green, $blue]
+proc drawPixel {
+    builtin color $pxColor
+    builtin rect from: [$pxX, $pxY], to: [$pxX, $pxY]
+}
 
-repeat x --> 100 {
-    repeat y --> 100 {
-        color $clr;
-        rect from[$x, $y] to[$x, $y];
+proc computePixelColor {
+    mut instant pxColor = [
+        ($pxX / $canvasSize) * 255,
+        255 - (($pxX / $canvasSize) * 255),
+        ($pxY / $canvasSize) * 255
+    ]
+}
+
+builtin canvas width: $canvasSize, height: $canvasSize
+
+repeat x --> $canvasSize {
+    repeat y --> $canvasSize {
+        mut pxX = $x
+        mut pxY = $y
+
+        run computePixelColor
+        run drawPixel
     }
 }
 
-write file "funny_rectangle.png";
+builtin write file: "i_am_a_bit_insane.png"

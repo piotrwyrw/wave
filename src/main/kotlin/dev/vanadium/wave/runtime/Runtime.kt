@@ -67,7 +67,7 @@ class Runtime(val script: Script) {
             return runBlock(expr) ?: LiteralExpression(0.0, expr.line)
         }
 
-        if (expr is VariableAssignment) {
+        if (expr is VariableOperation) {
             assignVariable(expr)
             return expr
         }
@@ -95,12 +95,26 @@ class Runtime(val script: Script) {
         if (count.value !is Double)
             throw RuntimeException("The target value in repeat statement is meant to be a number, got ${count.value::class.simpleName}")
 
+        // Declare the variable before using it in the repeat block
+        if (variables[repeat.variable.value] == null) {
+            assignVariable(
+                VariableOperation(
+                    repeat.variable.value,
+                    LiteralExpression(0.0, repeat.line),
+                    false,
+                    VariableAssignmentType.DECLARATION,
+                    repeat.line
+                )
+            );
+        }
+
         repeat(count.value.toInt()) {
             assignVariable(
-                VariableAssignment(
+                VariableOperation(
                     repeat.variable.value,
                     LiteralExpression(it.toDouble(), repeat.line),
                     false,
+                    VariableAssignmentType.MUTATION,
                     repeat.line
                 )
             )
@@ -122,10 +136,30 @@ class Runtime(val script: Script) {
         return null
     }
 
-    private fun assignVariable(assignment: VariableAssignment) {
-        variables[assignment.id] = processExpression(
-            if (!assignment.instant) assignment.value else assignment.value.atomic(this)
+    private fun assignVariable(assignment: VariableOperation) {
+        if (assignment.type == VariableAssignmentType.DECLARATION && variables[assignment.id] != null) {
+            throw RuntimeException("Attempted redefinition of variable \"${assignment.id}\" on line ${assignment.line}. Previous definition on line ${variables[assignment.id]!!.line}")
+        }
+
+        if (assignment.type == VariableAssignmentType.MUTATION && variables[assignment.id] == null) {
+            throw RuntimeException("Attempting to mutate an undefined variable \"${assignment.id}\" on line ${assignment.line}")
+        }
+
+        // TODO: Detect self-references and enforce the instant modifier!
+
+        val atomicValue = assignment.value.atomic(this)
+
+        val expr = processExpression(
+            if (!assignment.instant) assignment.value else atomicValue
         )
+
+        // Non-instant array expressions are not allowed, as they would be very inefficient to test against potential circular
+        // dependencies and are hence more prone to causing stack overflows and infinite recursion issues.
+        if (expr::class == ArrayExpression::class && !assignment.instant) {
+            throw RuntimeException("The array-valued variable \"${assignment.id}\" on line ${assignment.line} must be marked \"instant\" for stability reasons.")
+        }
+
+        variables[assignment.id] = expr
     }
 
     private fun runCommand(node: CommandNode) {

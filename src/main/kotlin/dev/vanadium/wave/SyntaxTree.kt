@@ -457,14 +457,20 @@ class CommandNode(
     }
 }
 
-class VariableAssignment(
+enum class VariableAssignmentType {
+    DECLARATION,
+    MUTATION
+}
+
+class VariableOperation(
     val id: String,
     val value: ExpressionNode,
     val instant: Boolean = false,
+    val type: VariableAssignmentType,
     line: Int
 ) : ExpressionNode(line) {
     override fun print(indent: Int) {
-        println(indentation(indent) + "Variable assignment \"${id}\":")
+        println(indentation(indent) + "Variable operation ${type} \"${id}\":")
         value.print(indent + 1)
     }
 

@@ -24,11 +24,13 @@ enum class TokenType(val value: String? = null) {
     LGREATER(">"),
     RGREATER("<"),
     SEMICOLON(";"),
+    COLON(":"),
     DOLLARSIGN("$"),
     EQUALS("="),
     VBAR("|"),
     HAT("^"),
     AT("@"),
+    HASH("#"),
     EXCLAMATION("!"),
 
     // Complex tokens

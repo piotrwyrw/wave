@@ -10,8 +10,6 @@ class Parser(val tokenizer: Tokenizer) {
     var currentToken: Token = undefinedToken(0)
     var nextToken: Token = undefinedToken(0)
 
-    val reserved: Array<String> = arrayOf("instant", "fun", "repeat")
-
     lateinit var script: Script
 
     init {
@@ -37,7 +35,7 @@ class Parser(val tokenizer: Tokenizer) {
     }
 
     fun parseNext(): Node {
-        if (compareToken(currentToken, "fun")) {
+        if (compareToken(currentToken, "proc")) {
             return parseFunctionDefinition()
         }
 
@@ -45,11 +43,7 @@ class Parser(val tokenizer: Tokenizer) {
             return parseReturnStatement()
         }
 
-        if ((compareToken(currentToken, TokenType.IDENTIFIER) && !compareToken(
-                nextToken,
-                TokenType.EQUALS
-            )) && !reserved.contains(currentToken.value)
-        ) {
+        if (compareToken(currentToken, "builtin")) {
             return parseCommand()
         }
 
@@ -57,8 +51,8 @@ class Parser(val tokenizer: Tokenizer) {
     }
 
     fun parseFunctionDefinition(): FunctionDefinitionNode {
-        if (!compareToken(currentToken, "fun")) {
-            throw RuntimeException("Expected 'fun' at the beginning of a function definition, got ${currentToken.type} on line ${currentToken.line}")
+        if (!compareToken(currentToken, "proc")) {
+            throw RuntimeException("Expected 'proc' at the beginning of a function definition, got ${currentToken.type} on line ${currentToken.line}")
         }
 
         val line = currentToken.line
@@ -97,20 +91,21 @@ class Parser(val tokenizer: Tokenizer) {
     }
 
     fun parseFunctionCall(): FunctionCall {
-        if (!compareToken(currentToken, TokenType.IDENTIFIER)) {
-            throw SyntaxError("Expected identifier at the start of a function call, got ${currentToken.type} on line ${currentToken.line}")
+        if (!compareToken(currentToken, "run")) {
+            throw SyntaxError("Expected \"run\" at the start of a procedure call, got ${currentToken.type} on line ${currentToken.line}")
         }
 
         val line = currentToken.line
+
+        consume() // Skip 'run'
+
+        if (!compareToken(currentToken, TokenType.IDENTIFIER)) {
+            throw SyntaxError("Expected procedure identifier after \"run\", got ${currentToken.type} on line ${currentToken.line}")
+        }
+
         val id = currentToken
 
         consume() // SKip the function ID
-
-        if (!compareToken(currentToken, TokenType.EXCLAMATION)) {
-            throw SyntaxError("Expected '!' after function ID, got ${currentToken.type} on line ${currentToken.line}")
-        }
-
-        consume() // Skip '!'
 
         return FunctionCall(id, line)
     }
@@ -182,8 +177,8 @@ class Parser(val tokenizer: Tokenizer) {
             return parseArray()
         }
 
-        if (compareToken(currentToken, TokenType.IDENTIFIER) && !compareToken(nextToken, TokenType.EXCLAMATION) && (!reserved.contains(currentToken.value) || currentToken.value == "instant")) {
-            return parseVariableAssignment()
+        if (compareToken(currentToken, "decl") || compareToken(currentToken, "mut")) {
+            return parseVariableOperation()
         }
 
         if (compareToken(currentToken, TokenType.DOLLARSIGN)) {
@@ -208,7 +203,7 @@ class Parser(val tokenizer: Tokenizer) {
             return parseBlock()
         }
 
-        if (compareToken(currentToken, TokenType.IDENTIFIER) && compareToken(nextToken, TokenType.EXCLAMATION)) {
+        if (compareToken(currentToken, "run")) {
             return parseFunctionCall()
         }
 
@@ -263,7 +258,19 @@ class Parser(val tokenizer: Tokenizer) {
         return literal
     }
 
-    fun parseVariableAssignment(): VariableAssignment {
+    fun parseVariableOperation(): VariableOperation {
+        if (!compareToken(currentToken, "decl") && !compareToken(currentToken, "mut")) {
+            throw SyntaxError("Expected 'decl' or 'mut' at the start of a variable operation, got '${currentToken.type}' on line ${currentToken.line}")
+        }
+
+        val type: VariableAssignmentType = when (currentToken.value) {
+            "decl" -> VariableAssignmentType.DECLARATION
+            "mut" -> VariableAssignmentType.MUTATION
+            else -> throw SyntaxError("Unknown variable operation: ${currentToken.value} on line ${currentToken.line}")
+        }
+
+        consume() // Skip operator
+
         var instant = false
 
         if (compareToken(currentToken, "instant")) {
@@ -288,7 +295,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         val expr = parseExpression()
 
-        return VariableAssignment(id, expr, instant, line)
+        return VariableOperation(id, expr, instant, type, line)
     }
 
     fun parseVariableReferenceExpression(): VariableReferenceExpression {
@@ -407,8 +414,14 @@ class Parser(val tokenizer: Tokenizer) {
     }
 
     fun parseCommand(): CommandNode {
+        if (!compareToken(currentToken, "builtin")) {
+            throw SyntaxError("Expected \"builtin\" at the start of a command invocation, got ${currentToken.type} on line ${currentToken.line}")
+        }
+
+        consume() // Skip 'builtin'
+
         if (!compareToken(currentToken, TokenType.IDENTIFIER)) {
-            throw SyntaxError("Expected identifier at the beginning of a command, got ${currentToken.type} on line ${currentToken.line}")
+            throw SyntaxError("Expected command identifier after 'builtin', got ${currentToken.type} on line ${currentToken.line}")
         }
 
         val line = currentToken.line
@@ -432,7 +445,7 @@ class Parser(val tokenizer: Tokenizer) {
         }
 
         // First, try parsing a default parameter
-        if (!compareToken(currentToken, TokenType.IDENTIFIER) || (compareToken(currentToken, TokenType.IDENTIFIER) && compareToken(nextToken, TokenType.EXCLAMATION))) {
+        if (!compareToken(currentToken, TokenType.IDENTIFIER) && !compareToken(nextToken, TokenType.COLON)) {
             val expr = parseExpression()
             args.put("default", expr)
         }
@@ -440,13 +453,14 @@ class Parser(val tokenizer: Tokenizer) {
         // Parse regular parameters
         while (true) {
             // The semicolon marks the end of the argument sequence
-            if (compareToken(currentToken, TokenType.SEMICOLON)) {
-                consume() // Skip ';'
+            if (args.isNotEmpty() && !compareToken(currentToken, TokenType.COMMA))
                 break
-            }
 
-            if (!compareToken(currentToken, TokenType.IDENTIFIER)) {
-                throw SyntaxError("Expected ';' or more arguments, got ${currentToken.type} on line ${currentToken.line}.")
+            if (compareToken(currentToken, TokenType.COMMA))
+                consume() // Skip ','
+
+            if (!compareToken(currentToken, TokenType.IDENTIFIER) || !compareToken(nextToken, TokenType.COLON)) {
+                throw SyntaxError("Expected argument identifier followed by a colon, got ${currentToken.type} on line ${currentToken.line}.")
             }
 
             val label = currentToken.value
@@ -456,6 +470,8 @@ class Parser(val tokenizer: Tokenizer) {
             }
 
             consume() // Skip arg label
+
+            consume() // Skip ':'
 
             val expr = parseExpression()
 
