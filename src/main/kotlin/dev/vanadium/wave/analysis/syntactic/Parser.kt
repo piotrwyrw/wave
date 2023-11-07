@@ -47,6 +47,10 @@ class Parser(val tokenizer: Tokenizer) {
             return parseCommand()
         }
 
+        if (compareToken(currentToken, TokenType.COLON) && compareToken(nextToken, TokenType.LCURLY)) {
+            return parseBlockStatement();
+        }
+
         return parseExpression()
     }
 
@@ -72,8 +76,10 @@ class Parser(val tokenizer: Tokenizer) {
         }
 
         val block = parseBlock()
+        val def = FunctionDefinitionNode(id, block, line)
+        def.block.withHolder(def)
 
-        return FunctionDefinitionNode(id, block, line)
+        return def
     }
 
     fun parseReturnStatement(): ReturnNode {
@@ -391,7 +397,7 @@ class Parser(val tokenizer: Tokenizer) {
 
     fun parseBlock(): BlockNode {
         if (!compareToken(currentToken, TokenType.LCURLY)) {
-            throw RuntimeException("Expected '{' at the beginning of a block statement, got ${currentToken.type} on line ${currentToken.line}")
+            throw SyntaxError("Expected '{' at the beginning of a block statement, got ${currentToken.type} on line ${currentToken.line}")
         }
 
         val line = currentToken.line
@@ -411,6 +417,21 @@ class Parser(val tokenizer: Tokenizer) {
         consume() // SKip '}'
 
         return BlockNode(nodes, line)
+    }
+
+    fun parseBlockStatement(): BlockStatement {
+        if (!compareToken(currentToken, TokenType.COLON)) {
+            throw SyntaxError("Expected ':' at the start of a block statement")
+        }
+
+        val line = currentToken.line
+
+        consume() // Skip ':'
+
+        val block = parseBlock()
+
+        // Note: Holder is assigned in the init block
+        return BlockStatement(block, line)
     }
 
     fun parseCommand(): CommandNode {

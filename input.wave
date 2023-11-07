@@ -1,7 +1,9 @@
 proc abc {
-    {
-        return 123
+    :{
+        builtin print "Hello, World!"
     }
+
+    return "Hello, Hans!"
 }
 
 builtin print (run abc)

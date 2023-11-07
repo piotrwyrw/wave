@@ -52,6 +52,11 @@ class Runtime(val script: Script) {
             return null
         }
 
+        if (node is BlockStatement) {
+            runBlock(node.block)
+            return null
+        }
+
         return null
     }
 
@@ -139,6 +144,9 @@ class Runtime(val script: Script) {
 
             return retVal
         }
+
+        if (block.holder == null)
+            throw RuntimeException("All blocks used in an expression context must return a value. Consider using a block statement on line ${block.line}")
 
         return null
     }

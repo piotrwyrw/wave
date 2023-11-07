@@ -530,12 +530,39 @@ class BlockNode(
     val nodes: List<Node>,
     line: Int
 ) : ExpressionNode(line) {
+
+    var holder: Node? = null
+
     override fun print(indent: Int) {
         println(indentation(indent) + "Block:")
+        if (holder != null)
+            println(indentation(indent + 1) + "Held by: ${holder!!::class.simpleName} on line ${holder!!.line}")
         nodes.forEach {
             it.print(indent + 1)
         }
     }
+
+    fun withHolder(holder: Node?): ExpressionNode {
+        this.holder = holder
+        return this
+    }
+
+}
+
+class BlockStatement(
+    val block: BlockNode,
+    line: Int
+) : StatementNode(line) {
+
+    init {
+        block.holder = this
+    }
+
+    override fun print(indent: Int) {
+        println(indentation(indent) + "Block statement:")
+        block.print(indent + 1)
+    }
+
 }
 
 class FunctionDefinitionNode(
