@@ -33,7 +33,7 @@ class Runtime(val script: Script) {
             runNode(node)
     }
 
-    private fun runNode(node: Node): ExpressionNode? {
+    private fun runNode(node: Node): Pair<YieldType, ExpressionNode>? {
         if (node is ExpressionNode) {
             return processExpression(node)
         }
@@ -44,7 +44,7 @@ class Runtime(val script: Script) {
         }
 
         if (node is ReturnNode) {
-            return processExpression(node.expression)
+            return Pair(YieldType.RETURN, processExpression(node.expression).second)
         }
 
         if (node is FunctionDefinitionNode) {
@@ -55,32 +55,34 @@ class Runtime(val script: Script) {
         return null
     }
 
-    fun processExpression(expr: ExpressionNode): ExpressionNode {
+    fun processExpression(expr: ExpressionNode): Pair<YieldType, ExpressionNode> {
         if (expr is FunctionCall) {
             val fn: FunctionDefinitionNode = functions[expr.name.value]
                 ?: throw RuntimeException("Attempted call to an undefined function '${expr.name.value}' on line ${expr.line}")
 
-            return processExpression(fn.block)
+            val e = processExpression(fn.block)
+
+            return e
         }
 
         if (expr is BlockNode) {
-            return runBlock(expr) ?: LiteralExpression(0.0, expr.line)
+            return runBlock(expr) ?: Pair(YieldType.EXPRESSION, LiteralExpression(0.0, expr.line))
         }
 
         if (expr is ArrayExpression) {
-            return expr.atomic(this)
+            return Pair(YieldType.EXPRESSION, expr.atomic(this))
         }
 
         if (expr is VariableOperation) {
             assignVariable(expr)
-            return expr
+            return Pair(YieldType.EXPRESSION, expr)
         }
 
         if (expr is RepeatNode) {
-            return runRepeatStatement(expr) ?: LiteralExpression(0.0, expr.line)
+            return runRepeatStatement(expr) ?: Pair(YieldType.EXPRESSION, LiteralExpression(0.0, expr.line))
         }
 
-        return expr
+        return Pair(YieldType.EXPRESSION, expr)
     }
 
     private fun defineFunction(node: FunctionDefinitionNode) {
@@ -90,7 +92,7 @@ class Runtime(val script: Script) {
         functions[node.name.value] = node
     }
 
-    private fun runRepeatStatement(repeat: RepeatNode): ExpressionNode? {
+    private fun runRepeatStatement(repeat: RepeatNode): Pair<YieldType, ExpressionNode>? {
         val count = repeat.count.atomic(this)
 
         if (count !is LiteralExpression<*>)
@@ -122,21 +124,22 @@ class Runtime(val script: Script) {
                     repeat.line
                 )
             )
-            return runBlock(repeat.block) ?: return@repeat
+            val e = runBlock(repeat.block) ?: return@repeat
         }
 
         return null
     }
 
-    private fun runBlock(block: BlockNode): ExpressionNode? {
+    private fun runBlock(block: BlockNode): Pair<YieldType, ExpressionNode>? {
         block.nodes.forEach {
             val retVal = runNode(it) ?: return@forEach
 
-            if (it !is ReturnNode)
+            if (retVal.first != YieldType.RETURN)
                 return@forEach
 
             return retVal
         }
+
         return null
     }
 
@@ -163,7 +166,7 @@ class Runtime(val script: Script) {
             throw RuntimeException("The array-valued variable \"${assignment.id}\" on line ${assignment.line} must be marked \"instant\" for stability reasons.")
         }
 
-        variables[assignment.id] = expr
+        variables[assignment.id] = expr.second
     }
 
     private fun runCommand(node: CommandNode) {
@@ -175,7 +178,7 @@ class Runtime(val script: Script) {
         // Make sure all command arguments are as atomic as possible
         node.args.forEach { (t, u) ->
             val atomic = u.atomic(this)
-            atomicArgs[t] = processExpression(atomic).atomic(this)
+            atomicArgs[t] = processExpression(atomic).second.atomic(this)
         }
 
         val handler = commandHandlers[node.label]!!

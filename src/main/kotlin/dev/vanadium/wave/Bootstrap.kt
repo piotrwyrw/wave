@@ -6,6 +6,7 @@ import dev.vanadium.wave.exception.SyntaxError
 import dev.vanadium.wave.runtime.Runtime
 import dev.vanadium.wave.util.readFile
 import java.io.File
+import kotlin.system.exitProcess
 
 fun main() {
     val tokenizer = Tokenizer(readFile(File("input.wave")))

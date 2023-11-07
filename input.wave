@@ -1,29 +1,7 @@
-decl canvasSize = 100
-decl pxX = 0
-decl pxY = 0
-
-proc computePixelColor {
-    return [
-        ($pxX / $canvasSize) * 255,
-        255 - (($pxX / $canvasSize) * 255),
-        ($pxY / $canvasSize) * 255
-    ]
-}
-
-proc drawPixel {
-    builtin color (run computePixelColor)
-    builtin rect from: [$pxX, $pxY], to: [$pxX, $pxY]
-}
-
-builtin canvas width: $canvasSize, height: $canvasSize
-
-repeat x --> $canvasSize {
-    repeat y --> $canvasSize {
-        mut pxX = $x
-        mut pxY = $y
-
-        run drawPixel
+proc abc {
+    {
+        return 123
     }
 }
 
-builtin write file: "i_am_a_bit_insane.png"
+builtin print (run abc)

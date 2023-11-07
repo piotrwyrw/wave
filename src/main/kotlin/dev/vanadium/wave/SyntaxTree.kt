@@ -49,7 +49,7 @@ abstract class ExpressionNode(line: Int) : Node(line) {
      */
     open fun reduce(runtime: Runtime): ExpressionNode {
         if (javaClass.getAnnotation(RuntimeOutsourcedReduction::class.java) != null)
-            return runtime.processExpression(this)
+            return runtime.processExpression(this).second
 
         return this
     }
