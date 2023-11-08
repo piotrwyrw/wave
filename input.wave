@@ -1,6 +1,7 @@
 proc abc {
     :{
         builtin print "Hello, World!"
+        return "EEEE"
     }
 
     return "Hello, Hans!"

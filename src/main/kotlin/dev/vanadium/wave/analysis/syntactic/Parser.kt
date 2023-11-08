@@ -9,6 +9,7 @@ class Parser(val tokenizer: Tokenizer) {
 
     var currentToken: Token = undefinedToken(0)
     var nextToken: Token = undefinedToken(0)
+    var currentBlock: BlockNode? = null
 
     lateinit var script: Script
 
@@ -76,7 +77,7 @@ class Parser(val tokenizer: Tokenizer) {
         }
 
         val block = parseBlock()
-        val def = FunctionDefinitionNode(id, block, line)
+        val def = FunctionDefinitionNode(id, block, line, currentBlock)
         def.block.withHolder(def)
 
         return def
@@ -93,7 +94,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         val expr = parseExpression();
 
-        return ReturnNode(expr, line)
+        return ReturnNode(expr, line, currentBlock)
     }
 
     fun parseFunctionCall(): FunctionCall {
@@ -113,7 +114,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         consume() // SKip the function ID
 
-        return FunctionCall(id, line)
+        return FunctionCall(id, line, currentBlock)
     }
 
     fun parseExpression(): ExpressionNode {
@@ -131,7 +132,7 @@ class Parser(val tokenizer: Tokenizer) {
         if (expr::class != to::class)
             throw SyntaxError("The interpolation expression expects same types on both sides, got ${expr.javaClass.simpleName} and ${to.javaClass.simpleName} on line ${currentToken.line}.")
 
-        return InterpolationExpression(expr, to, expr.line)
+        return InterpolationExpression(expr, to, expr.line, currentBlock)
     }
 
     fun parseSimpleExpression(): ExpressionNode {
@@ -144,7 +145,7 @@ class Parser(val tokenizer: Tokenizer) {
 
             val right = parseMultiplicativeExpression()
 
-            left = BinaryExpressionNode(left, right, op, right.line)
+            left = BinaryExpressionNode(left, right, op, right.line, currentBlock)
         }
 
         return left
@@ -164,7 +165,7 @@ class Parser(val tokenizer: Tokenizer) {
 
             val right = parseExpressionAtom()
 
-            left = BinaryExpressionNode(left, right, op, right.line)
+            left = BinaryExpressionNode(left, right, op, right.line, currentBlock)
         }
 
         return left
@@ -237,7 +238,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         consume() // Skip second '|'
 
-        return UnaryOperationNode(expr, UnaryOperation.MAGNITUDE, line)
+        return UnaryOperationNode(expr, UnaryOperation.MAGNITUDE, line, currentBlock)
     }
 
     fun parseNumberLiteralExpression(): LiteralExpression<Double> {
@@ -245,7 +246,7 @@ class Parser(val tokenizer: Tokenizer) {
             throw SyntaxError("Expected integer literal, got ${currentToken.type} on line ${currentToken.line}")
         }
 
-        val literal = LiteralExpression<Double>(parseDouble(currentToken.value), currentToken.line)
+        val literal = LiteralExpression<Double>(parseDouble(currentToken.value), currentToken.line, currentBlock)
 
         consume()
 
@@ -257,7 +258,7 @@ class Parser(val tokenizer: Tokenizer) {
             throw SyntaxError("Expected string literal, got ${currentToken.type} on line ${currentToken.line}")
         }
 
-        val literal = LiteralExpression(currentToken.value, currentToken.line)
+        val literal = LiteralExpression(currentToken.value, currentToken.line, currentBlock)
 
         consume()
 
@@ -301,7 +302,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         val expr = parseExpression()
 
-        return VariableOperation(id, expr, instant, type, line)
+        return VariableOperation(id, expr, instant, type, line, currentBlock)
     }
 
     fun parseVariableReferenceExpression(): VariableReferenceExpression {
@@ -321,7 +322,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         consume() // Skip variable ID
 
-        return VariableReferenceExpression(id, line)
+        return VariableReferenceExpression(id, line, currentBlock)
     }
 
     fun parseArray(): ArrayExpression {
@@ -358,7 +359,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         consume() // Skip ')'
 
-        return ArrayExpression(expressions, line)
+        return ArrayExpression(expressions, line, currentBlock)
     }
 
     fun parseRepeat(): RepeatNode {
@@ -392,7 +393,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         val block = parseBlock()
 
-        return RepeatNode(target, block, variable, line)
+        return RepeatNode(target, block, variable, line, block)
     }
 
     fun parseBlock(): BlockNode {
@@ -416,10 +417,10 @@ class Parser(val tokenizer: Tokenizer) {
 
         consume() // SKip '}'
 
-        return BlockNode(nodes, line)
+        return BlockNode(nodes, line, currentBlock)
     }
 
-    fun parseBlockStatement(): BlockStatement {
+    fun parseBlockStatement(): BlockNode {
         if (!compareToken(currentToken, TokenType.COLON)) {
             throw SyntaxError("Expected ':' at the start of a block statement")
         }
@@ -431,7 +432,7 @@ class Parser(val tokenizer: Tokenizer) {
         val block = parseBlock()
 
         // Note: Holder is assigned in the init block
-        return BlockStatement(block, line)
+        return block.withHolder(null)
     }
 
     fun parseCommand(): CommandNode {
@@ -453,7 +454,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         val args = parseCommandArguments() // Parse the arguments
 
-        return CommandNode(label, args, line)
+        return CommandNode(label, args, line, currentBlock)
     }
 
     fun parseCommandArguments(): HashMap<String, ExpressionNode> {

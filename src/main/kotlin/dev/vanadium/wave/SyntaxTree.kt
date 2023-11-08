@@ -24,7 +24,7 @@ class Script(val nodes: List<Node>) {
 /**
  * Superclass of all nodes ever
  */
-abstract class Node(val line: Int) {
+abstract class Node(val line: Int, val superBlock: BlockNode?) {
     abstract fun print(indent: Int)
 
     protected fun indentation(indent: Int): String {
@@ -37,12 +37,12 @@ abstract class Node(val line: Int) {
  * The base class for all nodes involved in flow control and
  * commanding of the underlying graphics engine
  */
-abstract class StatementNode(line: Int) : Node(line)
+abstract class StatementNode(line: Int, superBlock: BlockNode?) : Node(line, superBlock)
 
 /**
  * Base class for all expression nodes (arrays, arithmetic ops, ...)
  */
-abstract class ExpressionNode(line: Int) : Node(line) {
+abstract class ExpressionNode(line: Int, superBlock: BlockNode?) : Node(line, superBlock) {
 
     /**
      * Reduces the expression to a form that is (hopefully) more atomic
@@ -111,12 +111,13 @@ abstract class ExpressionNode(line: Int) : Node(line) {
 
 class LiteralExpression<T : Any>(
     val value: T,
-    line: Int
-) : ExpressionNode(line) {
+    line: Int,
+    superBlock: BlockNode?
+) : ExpressionNode(line, superBlock) {
 
     companion object {
-        fun zero(line: Int): LiteralExpression<Double> {
-            return LiteralExpression(0.0, line)
+        fun zero(line: Int, sBlock: BlockNode): LiteralExpression<Double> {
+            return LiteralExpression(0.0, line, sBlock)
         }
     }
 
@@ -150,7 +151,7 @@ class LiteralExpression<T : Any>(
 
     override fun add(another: ExpressionNode): ExpressionNode {
         val anotherValue = if (another !is LiteralExpression<*>) {
-            LiteralExpression(another.string(), line)
+            LiteralExpression(another.string(), line, superBlock)
         } else {
             another
         }
@@ -159,43 +160,43 @@ class LiteralExpression<T : Any>(
 
         // The string always dominates the expression
         if (value is String || anotherValue.value is String) {
-            return LiteralExpression(string() + anotherValue.string(), line)
+            return LiteralExpression(string() + anotherValue.string(), line, superBlock)
         }
 
         val leftNumber = value as Double
         val rightNumber = anotherValue.value as Double
 
-        return LiteralExpression(leftNumber + rightNumber, line)
+        return LiteralExpression(leftNumber + rightNumber, line, superBlock)
     }
 
     override fun subtract(another: ExpressionNode): ExpressionNode {
         checkIsNumber(another, BinaryOperation.SUBTRACT)
 
-        return LiteralExpression(value as Double - (another as LiteralExpression<*>).value as Double, line)
+        return LiteralExpression(value as Double - (another as LiteralExpression<*>).value as Double, line, superBlock)
     }
 
     override fun multiply(another: ExpressionNode): ExpressionNode {
         checkIsNumber(another, BinaryOperation.MULTIPLY)
 
-        return LiteralExpression(value as Double * (another as LiteralExpression<*>).value as Double, line)
+        return LiteralExpression(value as Double * (another as LiteralExpression<*>).value as Double, line, superBlock)
     }
 
     override fun divide(another: ExpressionNode): ExpressionNode {
         checkIsNumber(another, BinaryOperation.DIVIDE)
 
-        return LiteralExpression(value as Double / (another as LiteralExpression<*>).value as Double, line)
+        return LiteralExpression(value as Double / (another as LiteralExpression<*>).value as Double, line, superBlock)
     }
 
     override fun power(another: ExpressionNode): ExpressionNode {
         checkIsNumber(another, BinaryOperation.POWER)
 
-        return PowerExpression(this, another, line)
+        return PowerExpression(this, another, line, superBlock)
     }
 
     override fun magnitude(): ExpressionNode {
         return when (value::class) {
-            String::class -> LiteralExpression((value as String).length, line)
-            Double::class -> LiteralExpression(abs(value as Double), line)
+            String::class -> LiteralExpression((value as String).length, line, superBlock)
+            Double::class -> LiteralExpression(abs(value as Double), line, superBlock)
             else -> throw RuntimeException("Invalid type for literal value encountered on line ${line}: ${value::class.simpleName}")
         }
     }
@@ -210,7 +211,8 @@ class LiteralExpression<T : Any>(
 class ArrayExpression(
     val value: ArrayList<ExpressionNode>,
     line: Int,
-) : ExpressionNode(line) {
+    superBlock: BlockNode?
+) : ExpressionNode(line, superBlock) {
 
     var type: Class<*>? = null
 
@@ -232,10 +234,10 @@ class ArrayExpression(
         val expressions: ArrayList<ExpressionNode> = arrayListOf()
 
         value.forEachIndexed { index, expressionNode ->
-            expressions.add(BinaryExpressionNode(expressionNode, another.value[index], BinaryOperation.ADD, line))
+            expressions.add(BinaryExpressionNode(expressionNode, another.value[index], BinaryOperation.ADD, line, superBlock))
         }
 
-        return ArrayExpression(expressions, line)
+        return ArrayExpression(expressions, line, superBlock)
     }
 
     override fun subtract(another: ExpressionNode): ExpressionNode {
@@ -248,17 +250,17 @@ class ArrayExpression(
         val expressions: ArrayList<ExpressionNode> = arrayListOf()
 
         value.forEachIndexed { index, expressionNode ->
-            expressions.add(BinaryExpressionNode(expressionNode, another.value[index], BinaryOperation.SUBTRACT, line))
+            expressions.add(BinaryExpressionNode(expressionNode, another.value[index], BinaryOperation.SUBTRACT, line, superBlock))
         }
 
-        return ArrayExpression(expressions, line)
+        return ArrayExpression(expressions, line, superBlock)
     }
 
     override fun magnitude(): ExpressionNode {
         if (value.size == 0)
-            return LiteralExpression(0.0, line)
+            return LiteralExpression(0.0, line, superBlock)
 
-        var left: ExpressionNode = PowerExpression(value.first(), LiteralExpression(2.0, line), line)
+        var left: ExpressionNode = PowerExpression(value.first(), LiteralExpression(2.0, line, superBlock), line, superBlock)
 
         value.forEachIndexed { index, expressionNode ->
             if (index == 0)
@@ -266,13 +268,14 @@ class ArrayExpression(
 
             left = BinaryExpressionNode(
                 left,
-                PowerExpression(expressionNode, LiteralExpression(2.0, line), line),
+                PowerExpression(expressionNode, LiteralExpression(2.0, line, superBlock), line, superBlock),
                 BinaryOperation.ADD,
-                line
+                line,
+                superBlock
             )
         }
 
-        return PowerExpression(left, LiteralExpression(1.0 / 2.0, line), line)
+        return PowerExpression(left, LiteralExpression(1.0 / 2.0, line, superBlock), line, superBlock)
     }
 
     override fun evaluateAt(at: ExpressionNode): ExpressionNode {
@@ -295,7 +298,7 @@ class ArrayExpression(
             atomicValues.add(value[index].atomic(runtime))
         }
 
-        return ArrayExpression(atomicValues, line).validateTypes()
+        return ArrayExpression(atomicValues, line, superBlock).validateTypes()
     }
 
     fun validateTypes(): ArrayExpression {
@@ -342,8 +345,9 @@ class ArrayExpression(
 
 class VariableReferenceExpression(
     val id: String,
-    line: Int
-) : ExpressionNode(line) {
+    line: Int,
+    superBlock: BlockNode?
+) : ExpressionNode(line, superBlock) {
     override fun print(indent: Int) {
         println(indentation(indent) + "Variable: ${id}")
     }
@@ -358,8 +362,9 @@ class VariableReferenceExpression(
 class InterpolationExpression(
     val from: ExpressionNode,
     val to: ExpressionNode,
-    line: Int
-) : ExpressionNode(line) {
+    line: Int,
+    superBlock: BlockNode?
+) : ExpressionNode(line, superBlock) {
     override fun print(indent: Int) {
         println(indentation(indent) + "Interpolation:")
         println(indentation(indent + 1) + "From:")
@@ -395,8 +400,9 @@ class BinaryExpressionNode(
     val left: ExpressionNode,
     val right: ExpressionNode,
     val operator: BinaryOperation,
-    line: Int
-) : ExpressionNode(line) {
+    line: Int,
+    superBlock: BlockNode?
+) : ExpressionNode(line, superBlock) {
     override fun print(indent: Int) {
         println(indentation(indent) + "Binary operation (${operator}):")
         println(indentation(indent + 1) + "Left:")
@@ -428,8 +434,9 @@ fun unaryOperationFromToken(token: Token): UnaryOperation {
 class UnaryOperationNode(
     val expression: ExpressionNode,
     val operator: UnaryOperation,
-    line: Int
-) : ExpressionNode(line) {
+    line: Int,
+    superBlock: BlockNode?
+) : ExpressionNode(line, superBlock) {
     override fun print(indent: Int) {
         println(indentation(indent) + "Unary operation (${operator}):")
         expression.print(indent + 1)
@@ -444,8 +451,9 @@ class UnaryOperationNode(
 class CommandNode(
     val label: String,
     val args: HashMap<String, ExpressionNode>,
-    line: Int
-) : StatementNode(line) {
+    line: Int,
+    superBlock: BlockNode?
+) : StatementNode(line, superBlock) {
     override fun print(indent: Int) {
         println(indentation(indent) + "Command \"${label}\":")
         args.forEach { (t, u) ->
@@ -468,8 +476,9 @@ class VariableOperation(
     val value: ExpressionNode,
     val instant: Boolean = false,
     val type: VariableAssignmentType,
-    line: Int
-) : ExpressionNode(line) {
+    line: Int,
+    superBlock: BlockNode?
+) : ExpressionNode(line, superBlock) {
     override fun print(indent: Int) {
         println(indentation(indent) + "Variable operation ${type} \"${id}\":")
         value.print(indent + 1)
@@ -482,8 +491,9 @@ class VariableOperation(
 class PowerExpression(
     val expression: ExpressionNode,
     val power: ExpressionNode,
-    line: Int
-) : ExpressionNode(line) {
+    line: Int,
+    superBlock: BlockNode?
+) : ExpressionNode(line, superBlock) {
     override fun print(indent: Int) {
         println(indentation(indent) + "Exponential expression (Power ${power}):")
         expression.print(indent + 1)
@@ -500,7 +510,7 @@ class PowerExpression(
             throw RuntimeException("Exponential degree not atomic enough")
         if (power.value !is Double)
             throw RuntimeException("Exponential degree must be a number.")
-        return LiteralExpression(atomic.value.pow(power.value), line)
+        return LiteralExpression(atomic.value.pow(power.value), line, superBlock)
     }
 }
 
@@ -508,8 +518,9 @@ class RepeatNode(
     val count: ExpressionNode,
     val block: BlockNode,
     val variable: Token,
-    line: Int
-) : ExpressionNode(line) {
+    line: Int,
+    superBlock: BlockNode?
+) : ExpressionNode(line, superBlock) {
     init {
         if (variable.type != TokenType.IDENTIFIER)
             throw SyntaxError("Target variable name is expected to be an identifier, got ${variable.type} in RepeatNode on line ${line}")
@@ -528,39 +539,27 @@ class RepeatNode(
 @RuntimeOutsourcedReduction
 class BlockNode(
     val nodes: List<Node>,
-    line: Int
-) : ExpressionNode(line) {
+    line: Int,
+    superBlock: BlockNode?
+) : ExpressionNode(line, superBlock) {
 
     var holder: Node? = null
+    var variables: HashMap<String, ExpressionNode> = hashMapOf()
 
     override fun print(indent: Int) {
         println(indentation(indent) + "Block:")
         if (holder != null)
             println(indentation(indent + 1) + "Held by: ${holder!!::class.simpleName} on line ${holder!!.line}")
+        else
+            println(indentation(indent + 1) + "No holder.")
         nodes.forEach {
             it.print(indent + 1)
         }
     }
 
-    fun withHolder(holder: Node?): ExpressionNode {
+    fun withHolder(holder: Node?): BlockNode {
         this.holder = holder
         return this
-    }
-
-}
-
-class BlockStatement(
-    val block: BlockNode,
-    line: Int
-) : StatementNode(line) {
-
-    init {
-        block.holder = this
-    }
-
-    override fun print(indent: Int) {
-        println(indentation(indent) + "Block statement:")
-        block.print(indent + 1)
     }
 
 }
@@ -568,8 +567,9 @@ class BlockStatement(
 class FunctionDefinitionNode(
     val name: Token,
     val block: BlockNode,
-    line: Int
-) : StatementNode(line) {
+    line: Int,
+    superBlock: BlockNode?
+) : StatementNode(line, superBlock) {
     override fun print(indent: Int) {
         println(indentation(indent) + "Function definition (${name.value}):")
         block.print(indent + 1)
@@ -579,8 +579,9 @@ class FunctionDefinitionNode(
 
 class FunctionCall(
     val name: Token,
-    line: Int
-) : ExpressionNode(line) {
+    line: Int,
+    superBlock: BlockNode?
+) : ExpressionNode(line, superBlock) {
     init {
         if (!compareToken(name, TokenType.IDENTIFIER))
             throw SyntaxError("Function name is expected to be an identifier, got ${name.type} on line ${line}")
@@ -593,8 +594,9 @@ class FunctionCall(
 
 class ReturnNode(
     val expression: ExpressionNode,
-    line: Int
-) : StatementNode(line) {
+    line: Int,
+    superBlock: BlockNode?
+) : StatementNode(line, superBlock) {
     override fun print(indent: Int) {
         println(indentation(indent) + "Return:")
         expression.print(indent + 1)

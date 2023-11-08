@@ -52,11 +52,6 @@ class Runtime(val script: Script) {
             return null
         }
 
-        if (node is BlockStatement) {
-            runBlock(node.block)
-            return null
-        }
-
         return null
     }
 
@@ -71,7 +66,7 @@ class Runtime(val script: Script) {
         }
 
         if (expr is BlockNode) {
-            return runBlock(expr) ?: Pair(YieldType.EXPRESSION, LiteralExpression(0.0, expr.line))
+            return runBlock(expr) ?: Pair(YieldType.EXPRESSION, LiteralExpression(0.0, expr.line, expr.superBlock))
         }
 
         if (expr is ArrayExpression) {
@@ -84,7 +79,10 @@ class Runtime(val script: Script) {
         }
 
         if (expr is RepeatNode) {
-            return runRepeatStatement(expr) ?: Pair(YieldType.EXPRESSION, LiteralExpression(0.0, expr.line))
+            return runRepeatStatement(expr) ?: Pair(
+                YieldType.EXPRESSION,
+                LiteralExpression(0.0, expr.line, expr.superBlock)
+            )
         }
 
         return Pair(YieldType.EXPRESSION, expr)
@@ -107,14 +105,16 @@ class Runtime(val script: Script) {
             throw RuntimeException("The target value in repeat statement is meant to be a number, got ${count.value::class.simpleName}")
 
         // Declare the variable before using it in the repeat block
+        // And yes, we're intentionally using repeat's block instead of it's superBlock
+        // [after all, we want to declare the variable inside of the rep. block]
         if (variables[repeat.variable.value] == null) {
             assignVariable(
                 VariableOperation(
                     repeat.variable.value,
-                    LiteralExpression(0.0, repeat.line),
+                    LiteralExpression(0.0, repeat.line, repeat.block),
                     false,
                     VariableAssignmentType.DECLARATION,
-                    repeat.line
+                    repeat.line, repeat.block
                 )
             );
         }
@@ -123,10 +123,11 @@ class Runtime(val script: Script) {
             assignVariable(
                 VariableOperation(
                     repeat.variable.value,
-                    LiteralExpression(it.toDouble(), repeat.line),
+                    LiteralExpression(it.toDouble(), repeat.line, repeat.block),
                     false,
                     VariableAssignmentType.MUTATION,
-                    repeat.line
+                    repeat.line,
+                    repeat.block
                 )
             )
             val e = runBlock(repeat.block) ?: return@repeat
