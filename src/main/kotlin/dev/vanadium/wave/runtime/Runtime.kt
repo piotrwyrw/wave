@@ -7,7 +7,6 @@ import dev.vanadium.wave.reflect.findAllCommandHandlers
 
 class Runtime(val script: Script) {
 
-    var variables: HashMap<String, ExpressionNode> = hashMapOf()
     var functions: HashMap<String, FunctionDefinitionNode> = hashMapOf()
     var commandHandlers: HashMap<String, CommandHandler> = hashMapOf()
 
@@ -17,8 +16,18 @@ class Runtime(val script: Script) {
         }
     }
 
-    fun findVariable(id: String): ExpressionNode? {
-        return variables[id]
+    fun findVariable(id: String, block: BlockNode): VariableOperation? {
+        val elem: Node = block.findElementRecursively(id) ?: return null
+        if (elem !is VariableOperation)
+            throw RuntimeException("Attempted to reference \"${id}\" in variable context: It is of type \"${elem::class.simpleName}\"")
+        return elem
+    }
+
+    fun findFunction(id: String, block: BlockNode): FunctionDefinitionNode? {
+        val elem: Node = block.findElementRecursively(id) ?: return null
+        if (elem !is FunctionDefinitionNode)
+            throw RuntimeException("Attempted to reference \"${id}\" in variable context: It is of type \"${elem::class.simpleName}\"")
+        return elem
     }
 
     fun registerCommand(label: String, handler: CommandHandler) {
@@ -29,8 +38,7 @@ class Runtime(val script: Script) {
     }
 
     fun run() {
-        for (node in script.nodes)
-            runNode(node)
+        runBlock(script.root)
     }
 
     private fun runNode(node: Node): Pair<YieldType, ExpressionNode>? {
@@ -104,39 +112,33 @@ class Runtime(val script: Script) {
         if (count.value !is Double)
             throw RuntimeException("The target value in repeat statement is meant to be a number, got ${count.value::class.simpleName}")
 
-        // Declare the variable before using it in the repeat block
-        // And yes, we're intentionally using repeat's block instead of it's superBlock
-        // [after all, we want to declare the variable inside of the rep. block]
-        if (variables[repeat.variable.value] == null) {
-            assignVariable(
-                VariableOperation(
-                    repeat.variable.value,
-                    LiteralExpression(0.0, repeat.line, repeat.block),
-                    false,
-                    VariableAssignmentType.DECLARATION,
-                    repeat.line, repeat.block
-                )
-            );
-        }
+        // Create a wrapper block to persist only the counter variable
+        val wrapper = BlockNode(arrayListOf(repeat.block), repeat.line, repeat.block).heldStatement()
+        repeat.block.superBlock = wrapper
+
+        assignVariable(
+            VariableOperation(
+                repeat.variable.value,
+                LiteralExpression(0.0, repeat.line, wrapper),
+                true,
+                VariableAssignmentType.DECLARATION,
+                repeat.line,
+                wrapper
+            )
+        )
 
         repeat(count.value.toInt()) {
-            assignVariable(
-                VariableOperation(
-                    repeat.variable.value,
-                    LiteralExpression(it.toDouble(), repeat.line, repeat.block),
-                    false,
-                    VariableAssignmentType.MUTATION,
-                    repeat.line,
-                    repeat.block
-                )
-            )
             val e = runBlock(repeat.block) ?: return@repeat
+            if (e.first == YieldType.RETURN)
+                return e
         }
 
         return null
     }
 
     private fun runBlock(block: BlockNode): Pair<YieldType, ExpressionNode>? {
+        block.clearAllElements() // Clear all potential symbols in the block before (re-)running it
+
         block.nodes.forEach {
             val retVal = runNode(it) ?: return@forEach
 
@@ -153,12 +155,18 @@ class Runtime(val script: Script) {
     }
 
     private fun assignVariable(assignment: VariableOperation) {
-        if (assignment.type == VariableAssignmentType.DECLARATION && variables[assignment.id] != null) {
-            throw RuntimeException("Attempted redefinition of variable \"${assignment.id}\" on line ${assignment.line}. Previous definition on line ${variables[assignment.id]!!.line}")
+        val previous = assignment.superBlock!!.findContainedElement(assignment.id)
+
+        if (assignment.type == VariableAssignmentType.DECLARATION && previous != null) {
+            throw RuntimeException("Attempted redefinition of an existing symbol when declaring variable \"${assignment.id}\" on line ${assignment.line}. Previous definition on line ${previous.line}")
         }
 
-        if (assignment.type == VariableAssignmentType.MUTATION && variables[assignment.id] == null) {
-            throw RuntimeException("Attempting to mutate an undefined variable \"${assignment.id}\" on line ${assignment.line}")
+        if (assignment.type == VariableAssignmentType.MUTATION && previous == null) {
+            throw RuntimeException("Attempting to mutate an undefined symbol \"${assignment.id}\" on line ${assignment.line}")
+        }
+
+        if (previous !is VariableOperation && assignment.type == VariableAssignmentType.MUTATION) {
+            throw RuntimeException("Attempting to treat a function symbol \"${assignment.id}\" as a variable on line ${assignment.line}")
         }
 
         // TODO: Detect self-references and enforce the instant modifier!
@@ -175,7 +183,7 @@ class Runtime(val script: Script) {
             throw RuntimeException("The array-valued variable \"${assignment.id}\" on line ${assignment.line} must be marked \"instant\" for stability reasons.")
         }
 
-        variables[assignment.id] = expr.second
+        assignment.superBlock!!.write(assignment.id, assignment)
     }
 
     private fun runCommand(node: CommandNode) {

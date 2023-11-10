@@ -9,7 +9,9 @@ class Parser(val tokenizer: Tokenizer) {
 
     var currentToken: Token = undefinedToken(0)
     var nextToken: Token = undefinedToken(0)
-    var currentBlock: BlockNode? = null
+
+    val rootBlock: BlockNode = BlockNode(arrayListOf(), 0, null).heldStatement()
+    var currentBlock: BlockNode = rootBlock
 
     lateinit var script: Script
 
@@ -24,13 +26,12 @@ class Parser(val tokenizer: Tokenizer) {
     }
 
     fun parseScript(): Script {
-        val nodes: ArrayList<Node> = arrayListOf()
 
         while (currentToken.type != TokenType.UNDEFINED) {
-            nodes.add(parseNext())
+            rootBlock.nodes.add(parseNext())
         }
 
-        this.script = Script(nodes)
+        this.script = Script(rootBlock)
 
         return this.script
     }
@@ -393,7 +394,10 @@ class Parser(val tokenizer: Tokenizer) {
 
         val block = parseBlock()
 
-        return RepeatNode(target, block, variable, line, block)
+        val rep = RepeatNode(target, block, variable, line, block)
+        rep.block.withHolder(rep)
+
+        return rep
     }
 
     fun parseBlock(): BlockNode {

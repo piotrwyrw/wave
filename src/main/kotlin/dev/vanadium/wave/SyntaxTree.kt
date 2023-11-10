@@ -11,12 +11,9 @@ import kotlin.math.pow
 val DOUBLE_TYPE = java.lang.Double::class.java
 val STRING_TYPE = java.lang.String::class.java
 
-class Script(val nodes: List<Node>) {
-
+class Script(val root: BlockNode) {
     fun printAllNodes() {
-        nodes.forEach {
-            it.print(0)
-        }
+        root.print(0)
     }
 
 }
@@ -24,11 +21,20 @@ class Script(val nodes: List<Node>) {
 /**
  * Superclass of all nodes ever
  */
-abstract class Node(val line: Int, val superBlock: BlockNode?) {
+abstract class Node(val line: Int, var superBlock: BlockNode?) {
     abstract fun print(indent: Int)
 
     protected fun indentation(indent: Int): String {
         return " ".repeat(indent * 4)
+    }
+
+}
+
+class EmptyPlaceholderNode(
+    line: Int
+) : Node(line, null) {
+    override fun print(indent: Int) {
+        println("Empty placeholder node")
     }
 
 }
@@ -234,7 +240,15 @@ class ArrayExpression(
         val expressions: ArrayList<ExpressionNode> = arrayListOf()
 
         value.forEachIndexed { index, expressionNode ->
-            expressions.add(BinaryExpressionNode(expressionNode, another.value[index], BinaryOperation.ADD, line, superBlock))
+            expressions.add(
+                BinaryExpressionNode(
+                    expressionNode,
+                    another.value[index],
+                    BinaryOperation.ADD,
+                    line,
+                    superBlock
+                )
+            )
         }
 
         return ArrayExpression(expressions, line, superBlock)
@@ -250,7 +264,15 @@ class ArrayExpression(
         val expressions: ArrayList<ExpressionNode> = arrayListOf()
 
         value.forEachIndexed { index, expressionNode ->
-            expressions.add(BinaryExpressionNode(expressionNode, another.value[index], BinaryOperation.SUBTRACT, line, superBlock))
+            expressions.add(
+                BinaryExpressionNode(
+                    expressionNode,
+                    another.value[index],
+                    BinaryOperation.SUBTRACT,
+                    line,
+                    superBlock
+                )
+            )
         }
 
         return ArrayExpression(expressions, line, superBlock)
@@ -260,7 +282,8 @@ class ArrayExpression(
         if (value.size == 0)
             return LiteralExpression(0.0, line, superBlock)
 
-        var left: ExpressionNode = PowerExpression(value.first(), LiteralExpression(2.0, line, superBlock), line, superBlock)
+        var left: ExpressionNode =
+            PowerExpression(value.first(), LiteralExpression(2.0, line, superBlock), line, superBlock)
 
         value.forEachIndexed { index, expressionNode ->
             if (index == 0)
@@ -353,9 +376,9 @@ class VariableReferenceExpression(
     }
 
     override fun reduce(runtime: Runtime): ExpressionNode {
-        val expr = runtime.findVariable(id)
+        val decl: VariableOperation = runtime.findVariable(id, superBlock!!)
             ?: throw RuntimeException("Referenced unknown variable \"${id}\" on line ${line}.")
-        return expr.atomic(runtime)
+        return decl.value.atomic(runtime)
     }
 }
 
@@ -538,13 +561,13 @@ class RepeatNode(
 
 @RuntimeOutsourcedReduction
 class BlockNode(
-    val nodes: List<Node>,
+    val nodes: ArrayList<Node>,
     line: Int,
     superBlock: BlockNode?
 ) : ExpressionNode(line, superBlock) {
 
     var holder: Node? = null
-    var variables: HashMap<String, ExpressionNode> = hashMapOf()
+    var elements: HashMap<String, Node> = hashMapOf()
 
     override fun print(indent: Int) {
         println(indentation(indent) + "Block:")
@@ -560,6 +583,30 @@ class BlockNode(
     fun withHolder(holder: Node?): BlockNode {
         this.holder = holder
         return this
+    }
+
+    fun heldStatement(): BlockNode {
+        this.holder = EmptyPlaceholderNode(line)
+        return this
+    }
+
+    fun clearAllElements() {
+        elements.clear()
+    }
+
+    fun findElementRecursively(id: String): Node? {
+        return elements[id] ?: (superBlock ?: return null).findElementRecursively(id)
+    }
+
+    fun findContainedElement(id: String): Node? {
+        return elements[id]
+    }
+
+    fun write(id: String, node: Node) {
+        if (node !is VariableOperation && node !is FunctionDefinitionNode)
+            throw RuntimeException("Node is neither a VariableOperation, nor a FunctionDefinitionNode. Invalid assignment operation.")
+
+        elements[id] = node
     }
 
 }
