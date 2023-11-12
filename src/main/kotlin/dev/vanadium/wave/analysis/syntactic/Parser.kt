@@ -50,7 +50,7 @@ class Parser(val tokenizer: Tokenizer) {
         }
 
         if (compareToken(currentToken, TokenType.COLON) && compareToken(nextToken, TokenType.LCURLY)) {
-            return parseBlockStatement();
+            return parseBlockStatement()
         }
 
         return parseExpression()
@@ -85,7 +85,7 @@ class Parser(val tokenizer: Tokenizer) {
     }
 
     fun parseReturnStatement(): ReturnNode {
-        val line = currentToken.line;
+        val line = currentToken.line
 
         if (!compareToken(currentToken, "return")) {
             throw SyntaxError("Expected 'return' at the start of a return statement, got '${currentToken.type}' on line ${line}")
@@ -93,7 +93,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         consume() // Skip 'return'
 
-        val expr = parseExpression();
+        val expr = parseExpression()
 
         return ReturnNode(expr, line, currentBlock)
     }
@@ -283,7 +283,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         if (compareToken(currentToken, "instant")) {
             instant = true
-            consume(); // Skip the qualifier
+            consume() // Skip the qualifier
         }
 
         if (!compareToken(currentToken, TokenType.IDENTIFIER)) {
@@ -411,9 +411,15 @@ class Parser(val tokenizer: Tokenizer) {
 
         val nodes: ArrayList<Node> = arrayListOf()
 
+        val lastBlock = currentBlock
+
+        currentBlock = BlockNode(nodes, line, lastBlock)
+
         while (!compareToken(currentToken, TokenType.RCURLY) && !compareToken(currentToken, TokenType.UNDEFINED)) {
             nodes.add(parseNext())
         }
+
+        currentBlock = lastBlock
 
         if (!compareToken(currentToken, TokenType.RCURLY)) {
             throw RuntimeException("Reached end of file while parsing block statement starting on line ${line}.")
@@ -435,8 +441,7 @@ class Parser(val tokenizer: Tokenizer) {
 
         val block = parseBlock()
 
-        // Note: Holder is assigned in the init block
-        return block.withHolder(null)
+        return block.heldStatement()
     }
 
     fun parseCommand(): CommandNode {

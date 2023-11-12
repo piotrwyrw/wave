@@ -1,3 +1,5 @@
-repeat i --> 10 {
-    builtin print $i
+:{
+    :{
+    }
+    decl abc = 123
 }

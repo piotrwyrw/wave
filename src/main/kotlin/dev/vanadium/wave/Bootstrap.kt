@@ -17,6 +17,7 @@ fun main() {
         println("[Parser] ${excpt.message}")
         return
     }
+    script.printAllNodes()
     val runtime = Runtime(script)
     try {
         runtime.run()

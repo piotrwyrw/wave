@@ -112,19 +112,15 @@ class Runtime(val script: Script) {
         if (count.value !is Double)
             throw RuntimeException("The target value in repeat statement is meant to be a number, got ${count.value::class.simpleName}")
 
-        // Create a wrapper block to persist only the counter variable
-        val wrapper = BlockNode(arrayListOf(repeat.block), repeat.line, repeat.block).heldStatement()
-        repeat.block.superBlock = wrapper
-
         assignVariable(
             VariableOperation(
                 repeat.variable.value,
-                LiteralExpression(0.0, repeat.line, wrapper),
+                LiteralExpression(0.0, repeat.line, repeat.block),
                 true,
                 VariableAssignmentType.DECLARATION,
                 repeat.line,
-                wrapper
-            )
+                repeat.block
+            ).parameter()
         )
 
         repeat(count.value.toInt()) {
@@ -155,10 +151,11 @@ class Runtime(val script: Script) {
     }
 
     private fun assignVariable(assignment: VariableOperation) {
-        val previous = assignment.superBlock!!.findContainedElement(assignment.id)
+        val previousContained = assignment.superBlock!!.findContainedElement(assignment.id)
+        val previous = assignment.superBlock!!.findElementRecursively(assignment.id)
 
-        if (assignment.type == VariableAssignmentType.DECLARATION && previous != null) {
-            throw RuntimeException("Attempted redefinition of an existing symbol when declaring variable \"${assignment.id}\" on line ${assignment.line}. Previous definition on line ${previous.line}")
+        if (assignment.type == VariableAssignmentType.DECLARATION && previousContained != null) {
+            throw RuntimeException("Attempted redefinition of an existing symbol when declaring variable \"${assignment.id}\" on line ${assignment.line}. Previous definition on line ${previousContained.line}")
         }
 
         if (assignment.type == VariableAssignmentType.MUTATION && previous == null) {
@@ -183,7 +180,10 @@ class Runtime(val script: Script) {
             throw RuntimeException("The array-valued variable \"${assignment.id}\" on line ${assignment.line} must be marked \"instant\" for stability reasons.")
         }
 
-        assignment.superBlock!!.write(assignment.id, assignment)
+        if (assignment.type == VariableAssignmentType.DECLARATION)
+            assignment.superBlock!!.write(assignment.id, assignment)
+        else
+            previous!!.superBlock!!.write(assignment.id, assignment)
     }
 
     private fun runCommand(node: CommandNode) {

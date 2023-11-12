@@ -404,7 +404,7 @@ enum class BinaryOperation {
     MULTIPLY,
     DIVIDE,
     POWER,
-    EVALUATE_AT;
+    EVALUATE_AT
 }
 
 fun binaryOperationFromToken(token: Token): BinaryOperation {
@@ -494,7 +494,7 @@ enum class VariableAssignmentType {
     MUTATION
 }
 
-class VariableOperation(
+open class VariableOperation(
     val id: String,
     val value: ExpressionNode,
     val instant: Boolean = false,
@@ -502,6 +502,14 @@ class VariableOperation(
     line: Int,
     superBlock: BlockNode?
 ) : ExpressionNode(line, superBlock) {
+
+    var parameterVariable: Boolean = false
+
+    fun parameter(): VariableOperation {
+        this.parameterVariable = true
+        return this
+    }
+
     override fun print(indent: Int) {
         println(indentation(indent) + "Variable operation ${type} \"${id}\":")
         value.print(indent + 1)
@@ -552,7 +560,7 @@ class RepeatNode(
     override fun print(indent: Int) {
         println(indentation(indent) + "Repeat (${variable}):")
         println(indentation(indent + 1) + "Count:")
-        count.print(indent + 2);
+        count.print(indent + 2)
 
         block.print(indent + 1)
     }
@@ -568,6 +576,15 @@ class BlockNode(
 
     var holder: Node? = null
     var elements: HashMap<String, Node> = hashMapOf()
+
+    constructor(
+        nodes: ArrayList<Node>,
+        line: Int,
+        superBlock: BlockNode?,
+        elements: HashMap<String, Node>
+    ) : this(nodes, line, superBlock) {
+        this.elements = HashMap(elements)
+    }
 
     override fun print(indent: Int) {
         println(indentation(indent) + "Block:")
@@ -591,11 +608,20 @@ class BlockNode(
     }
 
     fun clearAllElements() {
-        elements.clear()
+        for (element in elements) {
+            if (element.value is VariableOperation && (element.value as VariableOperation).parameterVariable) continue
+            elements.remove(element.key)
+        }
     }
 
     fun findElementRecursively(id: String): Node? {
-        return elements[id] ?: (superBlock ?: return null).findElementRecursively(id)
+        var element = elements[id]
+        if (element != null)
+            return element
+        if (superBlock == null)
+            return null
+        element = superBlock!!.findElementRecursively(id)
+        return element
     }
 
     fun findContainedElement(id: String): Node? {
